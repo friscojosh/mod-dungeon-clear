@@ -118,9 +118,9 @@ void RegisterHallsOfLightningHooks(ObjectiveHookRegistry::HookTable& out);
 // two files to satisfy a size rule would cost more than it saves.
 void RegisterUtgardePinnacleHooks(ObjectiveHookRegistry::HookTable& out);
 
-// Blackrock Spire (map 229) — forges the Blackrock Stadium area trigger (2026)
-// for an all-bot party. See BlackrockSpireEvents.cpp. Id 900 (fork: friscojosh;
-// kept clear of upstream's range).
+// Blackrock Spire (map 229) — forges the Blackrock Stadium area trigger (2026,
+// id 900) and the Dragonspire Hall trigger (2046, id 901). See
+// BlackrockSpireEvents.cpp. Fork: friscojosh; ids kept clear of upstream's range.
 void RegisterBlackrockSpireHooks(ObjectiveHookRegistry::HookTable& out);
 
 // Pit of Saron (map 658) — the Ymirjar gauntlet driver and the Tyrannus ledge

@@ -21,8 +21,9 @@
 // Overlord Wyrmthalak) and Upper (LFG 44, Pyroguard Emberseer -> General
 // Drakkisath). This file is its definition unit: the wing split and, on the
 // friscojosh fork, the UBRS encounter gates — the Rend/Gyth stadium (event 1,
-// OBJ(1), hook 900), the seven Dragonspire Hall rune packs (events 2-8,
-// OBJ(2..8)) and the Blackrock Altar (event 9, OBJ(9)). The TU stays linked
+// OBJ(1), hook 900), the Dragonspire Hall pack registration (event 10, OBJ(10),
+// hook 901), the seven hall rune packs (events 2-8, OBJ(2..8)) and the Blackrock
+// Altar (event 9, OBJ(9)). The TU stays linked
 // because the wing, event, roster and hook aggregators each call into it.
 
 // --- the REND/GYTH STADIUM, ANCHORED + PERSISTENT (fork: friscojosh) ----------
@@ -97,13 +98,14 @@ namespace
     // than the one just finished, so objectives sharing a key would be skipped
     // past; every UBRS anchor gets its own slot on this scale (all above LBRS's
     // bits 0-8, which a UBRS run filters out anyway).
-    constexpr int32 UBRS_ORDER_FIRST_RUNE = 10;  // runes take 10..16
-    constexpr int32 UBRS_ORDER_ALTAR = 17;
-    constexpr int32 UBRS_ORDER_EMBERSEER = 18;
-    constexpr int32 UBRS_ORDER_SOLAKAR = 19;
-    constexpr int32 UBRS_ORDER_STADIUM = 20;
-    constexpr int32 UBRS_ORDER_BEAST = 21;
-    constexpr int32 UBRS_ORDER_DRAKKISATH = 22;
+    constexpr int32 UBRS_ORDER_HALL_REGISTER = 10;
+    constexpr int32 UBRS_ORDER_FIRST_RUNE = 11;  // runes take 11..17
+    constexpr int32 UBRS_ORDER_ALTAR = 18;
+    constexpr int32 UBRS_ORDER_EMBERSEER = 19;
+    constexpr int32 UBRS_ORDER_SOLAKAR = 20;
+    constexpr int32 UBRS_ORDER_STADIUM = 21;
+    constexpr int32 UBRS_ORDER_BEAST = 22;
+    constexpr int32 UBRS_ORDER_DRAKKISATH = 23;
 
     constexpr uint32 UBRS_NPC_EMBERSEER = 9816;
     constexpr uint32 UBRS_NPC_SOLAKAR = 10264;
@@ -134,6 +136,23 @@ namespace
     // pulling the other, and 18y keeps each circle clear of the next rune's pack
     // (the nearest two runes are 32y apart). Order walks the lower floor, then the
     // upper, ending beside the first Emberseer door (216,-286).
+    //
+    // The per-rune mob lists live only in the instance script's memory and its
+    // 3s check is only scheduled by that trigger. After a server restart or an
+    // instance reload both are gone, and nothing puts a rune out until someone
+    // crosses AT 2046 again — a party logging back in inside the hall never does.
+    // So the first UBRS stop (OBJ(10), event 10, hook 901) walks the tank to the
+    // trigger and fires it, which re-registers whatever is still alive and
+    // restarts the check. Done by the room slot, so a finished hall skips it.
+    constexpr uint32 UBRS_EV_HALL_REGISTER = 10;
+    constexpr uint32 UBRS_HALL_REGISTER_OBJ_SEQ = 10;
+    constexpr uint32 UBRS_STATE_DRAGONSPIRE_ROOM = 15;  // DATA_DRAGONSPIRE_ROOM slot
+    constexpr uint32 UBRS_HALL_TRIGGER = 2046;          // at_dragonspire_hall, radius 10
+    constexpr float UBRS_HALL_TRIGGER_X = 102.4f;
+    constexpr float UBRS_HALL_TRIGGER_Y = -319.2f;
+    constexpr float UBRS_HALL_TRIGGER_Z = 65.5f;
+    constexpr uint32 UBRS_REGISTER_HALL_PACKS_HOOK = 901;  // fork-local, like 900
+
     constexpr float UBRS_RUNE_CLEAR_RADIUS = 18.0f;
     constexpr float UBRS_RUNE_CLEAR_ZBAND = 4.0f;
     constexpr float UBRS_RUNE_ARRIVE = 20.0f;  // >= the clear, so the event owns the tick
@@ -202,6 +221,29 @@ namespace
     }
 }
 
+namespace
+{
+    // RegisterHallPacks (hook 901): fire AT 2046 from the leader standing in it.
+    // at_dragonspire_hall -> SetData(DATA_DRAGONSPIRE_ROOM) schedules the rune
+    // pack registration 1s later unless the room is already DONE. Idempotent:
+    // a repeat just re-registers the packs still alive. (It also re-asserts the
+    // Dragonspine Door for a Seal of Ascension holder, which is harmless.)
+    ObjectiveArriveResult RegisterHallPacks(Player* bot, AiObjectContext* /*context*/,
+                                            DungeonBossInfo const& /*info*/)
+    {
+        if (!DcTargeting::GetInstanceScript(bot))
+            return ObjectiveArriveResult::Running;  // not in the instance yet
+
+        WorldPacket p(CMSG_AREATRIGGER);
+        p << uint32(UBRS_HALL_TRIGGER);
+        p.rpos(0);
+        bot->GetSession()->HandleAreaTriggerOpcode(p);
+        LOG_INFO("playerbots.dungeonclear", "[DC:{}] Dragonspire Hall packs registered via areatrigger {}",
+                 bot->GetName(), UBRS_HALL_TRIGGER);
+        return ObjectiveArriveResult::Done;
+    }
+}
+
 void RegisterBlackrockSpireEvents(std::vector<DungeonEvent>& out)
 {
     out.push_back(
@@ -218,6 +260,15 @@ void RegisterBlackrockSpireEvents(std::vector<DungeonEvent>& out)
                                       UBRS_STADIUM_HOLD, UBRS_STATE_REND, DcBossStateBit(DONE))
                 .RestartOnBossState(DcBossStateBit(FAIL) | DcBossStateBit(NOT_STARTED))
                 .Timeout(UBRS_STADIUM_TIMEOUT_MS)
+            .Build());
+
+    out.push_back(
+        EventBuilder(UBRS_MAP, UBRS_EV_HALL_REGISTER, "Dragonspire Hall: register the rune packs")
+            .Anchored(/*orderIndex, doc-only*/ UBRS_EV_HALL_REGISTER)
+            // Well inside the 10y trigger sphere; the core range-checks the fire.
+            .MoveTo(UBRS_HALL_TRIGGER_X, UBRS_HALL_TRIGGER_Y, UBRS_HALL_TRIGGER_Z, /*radius*/ 4.0f)
+            .Custom(UBRS_REGISTER_HALL_PACKS_HOOK)
+            .Wait(/*the instance schedules registration 1s out*/ 2000)
             .Build());
 
     for (UbrsRune const& rune : kUbrsRunes)
@@ -273,6 +324,14 @@ void RegisterBlackrockSpireRoster(std::vector<BossRosterPatch>& t)
     stadium.doneBossStateIndex = UBRS_STATE_REND;
     p.add.push_back(stadium);
 
+    DungeonBossInfo reg = MakeObjective(OBJ(UBRS_HALL_REGISTER_OBJ_SEQ), UBRS_BIT_EMBERSEER, UBRS_MAP,
+                                        "Dragonspire Hall: register the rune packs",
+                                        UBRS_HALL_TRIGGER_X, UBRS_HALL_TRIGGER_Y, UBRS_HALL_TRIGGER_Z,
+                                        /*arriveRadius*/ 6.0f, /*gateEntry*/ 0, /*hook*/ 0,
+                                        UBRS_EV_HALL_REGISTER, UBRS_ORDER_HALL_REGISTER);
+    reg.doneBossStateIndex = UBRS_STATE_DRAGONSPIRE_ROOM;
+    p.add.push_back(reg);
+
     // The rune packs, then the altar, ahead of Emberseer. Their encounterIndex is
     // Emberseer's bit as an ordering hint only (objectives complete by their
     // events and doneBossStateIndex, never by the kill mask); orderOverride
@@ -308,6 +367,7 @@ void RegisterBlackrockSpireRoster(std::vector<BossRosterPatch>& t)
 void RegisterBlackrockSpireHooks(ObjectiveHookRegistry::HookTable& out)
 {
     ObjectiveHookRegistry::AddHook(out, UBRS_ENSURE_STADIUM_STARTED_HOOK, &EnsureStadiumStarted);
+    ObjectiveHookRegistry::AddHook(out, UBRS_REGISTER_HALL_PACKS_HOOK, &RegisterHallPacks);
 }
 
 // --- wing layout ---------------------------------------------------------
@@ -351,6 +411,7 @@ void RegisterBlackrockSpireWings(std::unordered_map<uint32, DungeonWingLayout>& 
             DcRoster::OBJ(2), DcRoster::OBJ(3), DcRoster::OBJ(4), DcRoster::OBJ(5),  // Dragonspire
             DcRoster::OBJ(6), DcRoster::OBJ(7), DcRoster::OBJ(8),                    // Hall runes (events 2-8)
             DcRoster::OBJ(UBRS_ALTAR_OBJ_SEQ),     // Blackrock Altar objective (event 9)
+            DcRoster::OBJ(UBRS_HALL_REGISTER_OBJ_SEQ),  // Dragonspire Hall pack registration (event 10)
             10430,  // The Beast
             10363,  // General Drakkisath
         }, "ubrs", /*lfgDungeonId*/ 44, /*terminalBossEntry*/ 10363, /*encounterMask*/ 0x3E00u},

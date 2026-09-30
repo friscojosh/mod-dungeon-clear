@@ -1805,6 +1805,13 @@ TEST(BossRosterRegistryTest, UbrsRunesThenAltarPrecedeEmberseer)
     EXPECT_EQ(out[altarIdx].doneBossStateIndex, 9);
     EXPECT_EQ(out[emberseerIdx].encounterIndex, 9u);  // kill-bit untouched by the reorder
 
+    // The pack registration is the first UBRS stop, done by the room slot (15).
+    DungeonBossInfo const* reg = Find(out, BossRosterRegistry::ObjectiveEntry(10));
+    ASSERT_NE(reg, nullptr);
+    EXPECT_EQ(reg->doneBossStateIndex, 15);
+    EXPECT_EQ(reg->eventId, 10u);
+    EXPECT_EQ(&out.front(), reg);
+
     for (std::size_t i = 1; i < keys.size(); ++i)
         EXPECT_LT(keys[i - 1], keys[i]) << "UBRS anchors " << i - 1 << " and " << i << " share an order key";
 }

@@ -335,6 +335,12 @@ namespace DcEventDoorRegistry
             case 164726:  // UBRS — stadium entrance (GO_GYTH_ENTRY_DOOR)
             case 175185:  // UBRS — stadium wave gate (GO_DR_PORTCULLIS)
             case 175186:  // UBRS — stadium exit toward The Beast (GO_GYTH_EXIT_DOOR)
+            // The Emberseer doors: both entrances open when the seven Dragonspire
+            // Hall runes are out and shut while he is IN_PROGRESS; the exit opens
+            // on his death. All instance / boss_pyroguard_emberseer driven.
+            case 175244:  // UBRS — Emberseer In (GO_EMBERSEER_IN)
+            case 175705:  // UBRS — Emberseer second door (GO_DOORS)
+            case 175153:  // UBRS — Emberseer Out (GO_EMBERSEER_OUT)
                 return true;
             default:
                 return false;

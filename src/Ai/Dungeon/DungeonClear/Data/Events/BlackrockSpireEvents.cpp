@@ -19,11 +19,11 @@
 
 // Blackrock Spire (map 229) is two dungeons on one map: Lower (LFG 32, ends at
 // Overlord Wyrmthalak) and Upper (LFG 44, Pyroguard Emberseer -> General
-// Drakkisath). This file is its definition unit: the wing split, and the
-// Rend/Gyth stadium (event 1, OBJ(1), hook 900 — friscojosh fork). The other UBRS
-// encounter gates (Dragonspine Door, hall rune packs, the Blackrock Altar) are
-// still to come. The TU stays linked because the wing, event, roster and hook
-// aggregators each call into it explicitly.
+// Drakkisath). This file is its definition unit: the wing split and, on the
+// friscojosh fork, the UBRS encounter gates — the Rend/Gyth stadium (event 1,
+// OBJ(1), hook 900), the seven Dragonspire Hall rune packs (events 2-8,
+// OBJ(2..8)) and the Blackrock Altar (event 9, OBJ(9)). The TU stays linked
+// because the wing, event, roster and hook aggregators each call into it.
 
 // --- the REND/GYTH STADIUM, ANCHORED + PERSISTENT (fork: friscojosh) ----------
 // Warchief Rend Blackhand (10429) has a static spawn, but it is on the viewing
@@ -93,6 +93,87 @@ namespace
     // Five waves, the Rend walk-down and the Gyth + Rend fight.
     constexpr uint32 UBRS_STADIUM_TIMEOUT_MS = 1200000;
 
+    // UBRS clear order. The picker advances to the lowest key STRICTLY greater
+    // than the one just finished, so objectives sharing a key would be skipped
+    // past; every UBRS anchor gets its own slot on this scale (all above LBRS's
+    // bits 0-8, which a UBRS run filters out anyway).
+    constexpr int32 UBRS_ORDER_FIRST_RUNE = 10;  // runes take 10..16
+    constexpr int32 UBRS_ORDER_ALTAR = 17;
+    constexpr int32 UBRS_ORDER_EMBERSEER = 18;
+    constexpr int32 UBRS_ORDER_SOLAKAR = 19;
+    constexpr int32 UBRS_ORDER_STADIUM = 20;
+    constexpr int32 UBRS_ORDER_BEAST = 21;
+    constexpr int32 UBRS_ORDER_DRAKKISATH = 22;
+
+    constexpr uint32 UBRS_NPC_EMBERSEER = 9816;
+    constexpr uint32 UBRS_NPC_SOLAKAR = 10264;
+    constexpr uint32 UBRS_NPC_BEAST = 10430;
+    constexpr uint32 UBRS_NPC_DRAKKISATH = 10363;
+    constexpr uint32 UBRS_BIT_EMBERSEER = 9;
+    constexpr uint32 UBRS_STATE_EMBERSEER = 9;    // DATA_PYROGAURD_EMBERSEER slot
+
+    // --- the DRAGONSPIRE HALL runes ------------------------------------------
+    // The Emberseer doors (175244, 175705) open only once all seven hall runes
+    // are out. Crossing area trigger 2046 (just outside the Dragonspine Door,
+    // which every party entering UBRS crosses) makes the instance record, per
+    // rune, each Blackhand Dreadweaver / Summoner / Veteran (9817-9819) within
+    // 15y of it; every 3s it puts out a rune whose recorded mobs are all dead
+    // (slot DATA_HALL_RUNE_n = 16+n-1 -> DONE), and at seven the room slot
+    // (DATA_DRAGONSPIRE_ROOM, 15) goes DONE and the doors open. The ordinary
+    // clear only fights what stands on its path, so the tank reached Emberseer's
+    // shut door with packs still up.
+    //
+    // One OBJECTIVE per rune (the Dire Maul pylon pattern): boss-nav carries the
+    // tank to the rune, ClearRadius kills its pack, then a short hold waits for
+    // the instance's 3s check to put the rune out. doneBossStateIndex is the
+    // rune's own slot, so a re-entered instance skips runes already out.
+    //
+    // Measured on acore_world: each rune's pack is 3-5 mobs, the farthest 13.7y
+    // (2D) from its rune, all on the rune's floor. The hall has two floors, z~71
+    // (four runes) and z~77 (three); a 4y zBand keeps a clear on one floor from
+    // pulling the other, and 18y keeps each circle clear of the next rune's pack
+    // (the nearest two runes are 32y apart). Order walks the lower floor, then the
+    // upper, ending beside the first Emberseer door (216,-286).
+    constexpr float UBRS_RUNE_CLEAR_RADIUS = 18.0f;
+    constexpr float UBRS_RUNE_CLEAR_ZBAND = 4.0f;
+    constexpr float UBRS_RUNE_ARRIVE = 20.0f;  // >= the clear, so the event owns the tick
+    constexpr uint32 UBRS_RUNE_CLEAR_TIMEOUT_MS = 180000;
+    constexpr uint32 UBRS_RUNE_OUT_TIMEOUT_MS = 30000;  // ten of the instance's 3s checks
+
+    struct UbrsRune
+    {
+        uint32 eventId;
+        uint32 objSeq;
+        uint32 stateSlot;  // DATA_HALL_RUNE_n
+        float x, y, z;
+        char const* name;
+    };
+    constexpr UbrsRune kUbrsRunes[] = {
+        { 2, 2, 18, 124.8f, -298.0f, 70.9f, "Dragonspire Hall: rune pack (lower west)" },       // 175195, rune 3
+        { 3, 3, 16, 125.4f, -340.5f, 70.9f, "Dragonspire Hall: rune pack (lower south-west)" }, // 175197, rune 1
+        { 4, 4, 17, 155.3f, -353.0f, 70.8f, "Dragonspire Hall: rune pack (lower south)" },      // 175199, rune 2
+        { 5, 5, 19, 155.3f, -286.1f, 70.9f, "Dragonspire Hall: rune pack (lower north)" },      // 175200, rune 4
+        { 6, 6, 22, 192.7f, -258.4f, 76.9f, "Dragonspire Hall: rune pack (upper north)" },      // 175194, rune 7
+        { 7, 7, 21, 228.8f, -301.5f, 76.9f, "Dragonspire Hall: rune pack (upper east)" },       // 175196, rune 6
+        { 8, 8, 20, 215.2f, -334.7f, 76.8f, "Dragonspire Hall: rune pack (upper south)" },      // 175198, rune 5
+    };
+
+    // --- the BLACKROCK ALTAR -------------------------------------------------
+    // Pyroguard Emberseer is encaged and unattackable until a player uses the
+    // Blackrock Altar (175706, a one-participant SUMMONING_RITUAL). Its spell
+    // fires event 4884, which starts him (slot 9 IN_PROGRESS, both doors shut);
+    // the Blackhand Incarcerators and then Emberseer himself come to the party.
+    // So: walk to the altar, use it, and hold the room until slot 9 is DONE —
+    // his Reset drops it to NOT_STARTED on a wipe, which rewinds to the click.
+    constexpr uint32 UBRS_EV_ALTAR = 9;
+    constexpr uint32 UBRS_ALTAR_OBJ_SEQ = 9;
+    constexpr uint32 UBRS_GO_BLACKROCK_ALTAR = 175706;
+    constexpr float UBRS_ALTAR_X = 144.4f;
+    constexpr float UBRS_ALTAR_Y = -280.9f;
+    constexpr float UBRS_ALTAR_Z = 91.5f;
+    constexpr float UBRS_ALTAR_HOLD = 20.0f;  // the whole room, altar to cage
+    constexpr uint32 UBRS_EMBERSEER_TIMEOUT_MS = 900000;
+
     // EnsureStadiumStarted (hook 900): fires the real area trigger from the
     // leader until Rend's slot is at least IN_PROGRESS. The core range-checks the
     // bot against the trigger sphere and runs at_blackrock_stadium, whose own
@@ -138,6 +219,41 @@ void RegisterBlackrockSpireEvents(std::vector<DungeonEvent>& out)
                 .RestartOnBossState(DcBossStateBit(FAIL) | DcBossStateBit(NOT_STARTED))
                 .Timeout(UBRS_STADIUM_TIMEOUT_MS)
             .Build());
+
+    for (UbrsRune const& rune : kUbrsRunes)
+        out.push_back(
+            EventBuilder(UBRS_MAP, rune.eventId, rune.name)
+                .Anchored(/*orderIndex, doc-only*/ rune.eventId)
+                .Persistent()
+                // 1. Kill the rune's pack.
+                .ClearRadius(rune.x, rune.y, rune.z, UBRS_RUNE_CLEAR_RADIUS, UBRS_RUNE_CLEAR_ZBAND)
+                    .Timeout(UBRS_RUNE_CLEAR_TIMEOUT_MS)
+                // 2. Wait for the instance to put the rune out.
+                .MoveToHoldUntilBossState(rune.x, rune.y, rune.z, UBRS_RUNE_CLEAR_RADIUS,
+                                          rune.stateSlot, DcBossStateBit(DONE))
+                    .Timeout(UBRS_RUNE_OUT_TIMEOUT_MS)
+                .Build());
+
+    out.push_back(
+        EventBuilder(UBRS_MAP, UBRS_EV_ALTAR, "Pyroguard Emberseer: Blackrock Altar")
+            .Anchored(/*encounterIndex*/ UBRS_BIT_EMBERSEER)
+            .Persistent()  // the Incarcerators and Emberseer are several combat gaps
+            // 1. Use the altar; UseGO early-returns Done once the ritual is spent.
+            .UseGO(UBRS_GO_BLACKROCK_ALTAR, /*searchRadius*/ 15.0f,
+                   UBRS_ALTAR_X, UBRS_ALTAR_Y, UBRS_ALTAR_Z)
+                .Timeout(60000)
+            // 2. Wait for the ritual to land (event 4884 -> slot 9 IN_PROGRESS).
+            //    No restart here: the slot is still NOT_STARTED while it casts.
+            .MoveToHoldUntilBossState(UBRS_ALTAR_X, UBRS_ALTAR_Y, UBRS_ALTAR_Z, UBRS_ALTAR_HOLD,
+                                      UBRS_STATE_EMBERSEER,
+                                      DcBossStateBit(IN_PROGRESS) | DcBossStateBit(DONE))
+                .Timeout(60000)
+            // 3. Hold the room until Emberseer is DONE; a reset rewinds to the click.
+            .MoveToHoldUntilBossState(UBRS_ALTAR_X, UBRS_ALTAR_Y, UBRS_ALTAR_Z, UBRS_ALTAR_HOLD,
+                                      UBRS_STATE_EMBERSEER, DcBossStateBit(DONE))
+                .RestartOnBossState(DcBossStateBit(FAIL) | DcBossStateBit(NOT_STARTED))
+                .Timeout(UBRS_EMBERSEER_TIMEOUT_MS)
+            .Build());
 }
 
 void RegisterBlackrockSpireRoster(std::vector<BossRosterPatch>& t)
@@ -153,9 +269,39 @@ void RegisterBlackrockSpireRoster(std::vector<BossRosterPatch>& t)
                                             "Rend: Blackrock Stadium",
                                             UBRS_STADIUM_X, UBRS_STADIUM_Y, UBRS_STADIUM_Z,
                                             /*arriveRadius*/ 12.0f, /*gateEntry*/ 0, /*hook*/ 0,
-                                            UBRS_EV_STADIUM);
+                                            UBRS_EV_STADIUM, UBRS_ORDER_STADIUM);
     stadium.doneBossStateIndex = UBRS_STATE_REND;
     p.add.push_back(stadium);
+
+    // The rune packs, then the altar, ahead of Emberseer. Their encounterIndex is
+    // Emberseer's bit as an ordering hint only (objectives complete by their
+    // events and doneBossStateIndex, never by the kill mask); orderOverride
+    // places them.
+    int32 order = UBRS_ORDER_FIRST_RUNE;
+    for (UbrsRune const& rune : kUbrsRunes)
+    {
+        DungeonBossInfo o = MakeObjective(OBJ(rune.objSeq), UBRS_BIT_EMBERSEER, UBRS_MAP, rune.name,
+                                          rune.x, rune.y, rune.z, UBRS_RUNE_ARRIVE,
+                                          /*gateEntry*/ 0, /*hook*/ 0, rune.eventId, order++);
+        o.doneBossStateIndex = static_cast<int32>(rune.stateSlot);
+        p.add.push_back(o);
+    }
+
+    DungeonBossInfo altar = MakeObjective(OBJ(UBRS_ALTAR_OBJ_SEQ), UBRS_BIT_EMBERSEER, UBRS_MAP,
+                                          "Pyroguard Emberseer: Blackrock Altar",
+                                          UBRS_ALTAR_X, UBRS_ALTAR_Y, UBRS_ALTAR_Z,
+                                          /*arriveRadius*/ 12.0f, /*gateEntry*/ 0, /*hook*/ 0,
+                                          UBRS_EV_ALTAR, UBRS_ORDER_ALTAR);
+    altar.doneBossStateIndex = UBRS_STATE_EMBERSEER;
+    p.add.push_back(altar);
+
+    // The real bosses keep their DBC kill-bits; only their place in the order moves.
+    p.reorder = {
+        { UBRS_NPC_EMBERSEER, UBRS_ORDER_EMBERSEER },
+        { UBRS_NPC_SOLAKAR, UBRS_ORDER_SOLAKAR },
+        { UBRS_NPC_BEAST, UBRS_ORDER_BEAST },
+        { UBRS_NPC_DRAKKISATH, UBRS_ORDER_DRAKKISATH },
+    };
     t.push_back(std::move(p));
 }
 
@@ -202,6 +348,9 @@ void RegisterBlackrockSpireWings(std::unordered_map<uint32, DungeonWingLayout>& 
             10264,  // Solakar Flamewreath
             10429,  // Warchief Rend Blackhand
             DcRoster::OBJ(UBRS_STADIUM_OBJ_SEQ),  // Rend: Blackrock Stadium objective (event 1)
+            DcRoster::OBJ(2), DcRoster::OBJ(3), DcRoster::OBJ(4), DcRoster::OBJ(5),  // Dragonspire
+            DcRoster::OBJ(6), DcRoster::OBJ(7), DcRoster::OBJ(8),                    // Hall runes (events 2-8)
+            DcRoster::OBJ(UBRS_ALTAR_OBJ_SEQ),     // Blackrock Altar objective (event 9)
             10430,  // The Beast
             10363,  // General Drakkisath
         }, "ubrs", /*lfgDungeonId*/ 44, /*terminalBossEntry*/ 10363, /*encounterMask*/ 0x3E00u},

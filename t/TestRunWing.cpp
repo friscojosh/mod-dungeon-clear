@@ -492,3 +492,32 @@ TEST(DcGapCloserTest, ClassifiesGapClosersAndNothingElse)
     EXPECT_FALSE(DcGapCloser::IsGapCloser("dps assist"));
     EXPECT_FALSE(DcGapCloser::IsGapCloser(""));
 }
+
+// DC tank marking (fork: friscojosh): the CC choice.
+#include "Ai/Dungeon/DungeonClear/Util/DcMarkPlan.h"
+
+TEST(DcMarkPlanTest, CcOnlyForBigPullsWithACaster)
+{
+    EXPECT_FALSE(DcMarkPlan::WantCc(3, true));   // three is a fight, not a CC pull
+    EXPECT_TRUE(DcMarkPlan::WantCc(4, true));
+    EXPECT_FALSE(DcMarkPlan::WantCc(10, false)); // nobody to cast it
+}
+
+TEST(DcMarkPlanTest, CcPicksTheHealthiestSheepableUnmarkedNonBoss)
+{
+    using C = DcMarkPlan::CcCandidate;
+    std::vector<C> c(6);
+    c[0].sheepableType = true; c[0].healthPct = 100.0f; c[0].marked = true;      // the skull
+    c[1].sheepableType = true; c[1].healthPct = 100.0f; c[1].tankTarget = true;  // tank's victim
+    c[2].sheepableType = false; c[2].healthPct = 100.0f;                          // Rage Talon: dragonkin
+    c[3].sheepableType = true; c[3].healthPct = 90.0f;                            // Blackhand Elite
+    c[4].sheepableType = true; c[4].healthPct = 95.0f;                            // Blackhand Iron Guard
+    c[5].sheepableType = true; c[5].healthPct = 100.0f; c[5].boss = true;         // a boss
+    EXPECT_EQ(DcMarkPlan::PickCc(c), 4);
+
+    c[4].immune = true;
+    EXPECT_EQ(DcMarkPlan::PickCc(c), 3);
+
+    c[3].healthPct = 0.0f; c[3].sheepableType = false;
+    EXPECT_EQ(DcMarkPlan::PickCc(c), -1);
+}

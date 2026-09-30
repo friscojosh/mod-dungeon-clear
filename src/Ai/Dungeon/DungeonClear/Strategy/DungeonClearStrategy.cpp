@@ -484,6 +484,12 @@ void DungeonClearCombatStrategy::InitTriggers(std::vector<TriggerNode*>& trigger
         "dungeon clear pull maneuver",
         { NextAction("dungeon clear pull maneuver", DcRel::PullManeuver) }));
 
+    // The leader marks the fight: skull on the focus, moon on a CC target for a
+    // big pull with a mage along (fork: friscojosh). See DcMarkTargets.h.
+    triggers.push_back(new TriggerNode(
+        "dungeon clear mark targets",
+        { NextAction("dungeon clear mark targets", DcRel::MarkTargets) }));
+
     // Combat-engine hold for held FOLLOWERS. A held follower enters combat the
     // instant the tank aggros (group combat) and switches to this engine, where
     // the non-combat hold-at-camp can't run and PassiveMultiplier explicitly

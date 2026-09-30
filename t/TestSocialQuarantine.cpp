@@ -143,6 +143,39 @@ TEST(DcSocialQuarantineTest, OnlyMagistersTerraceHasZones)
     EXPECT_TRUE(DcSocialQuarantineRegistry::Zones(MGT, 24744).empty());  // Vexallus
 }
 
+// Upper Blackrock Spire (fork: friscojosh): one zone, the Furnace's west nine,
+// gated on The Beast only. It must hold all nine spawns and no neighbour.
+TEST(DcSocialQuarantineTest, UbrsFurnaceWestNineOnly)
+{
+    constexpr uint32 UBRS = 229;
+    ASSERT_EQ(DcSocialQuarantineRegistry::AllZones(UBRS).size(), 1u);
+    ASSERT_EQ(DcSocialQuarantineRegistry::Zones(UBRS, 10430).size(), 1u);  // The Beast
+    EXPECT_TRUE(DcSocialQuarantineRegistry::Zones(UBRS, 10363).empty());   // Drakkisath
+    EXPECT_TRUE(DcSocialQuarantineRegistry::Zones(UBRS, 9816).empty());    // Emberseer
+
+    DcQuarantineZone const& z = *DcSocialQuarantineRegistry::Zones(UBRS, 10430).front();
+    auto in = [&z](float x, float y, float zz)
+    {
+        return std::hypot(x - z.x, y - z.y) <= z.radius && std::fabs(zz - z.z) <= z.zBand;
+    };
+    float const members[][3] = {
+        { 16.3f, -449.3f, 111.0f }, { 8.8f, -450.5f, 111.0f }, { 10.2f, -457.0f, 111.0f },
+        { 6.6f, -460.5f, 111.0f }, { 11.7f, -460.5f, 111.0f }, { 20.7f, -468.8f, 111.0f },
+        { 23.5f, -470.5f, 111.0f }, { 18.2f, -471.4f, 111.0f }, { 21.4f, -475.2f, 111.0f },
+    };
+    for (auto const& m : members)
+        EXPECT_TRUE(in(m[0], m[1], m[2])) << m[0] << "," << m[1];
+    float const neighbours[][3] = {
+        { 8.3f, -487.5f, 111.0f },   // Dragon Guard pair
+        { 31.9f, -490.7f, 111.0f },  // south-west three (Assassin)
+        { 37.9f, -451.1f, 111.0f },  // entrance formation (Elite)
+        { 70.9f, -474.6f, 115.5f },  // route Iron Guard / lone Assassin
+        { 49.1f, -477.5f, 111.7f },  // nearest route point
+    };
+    for (auto const& n : neighbours)
+        EXPECT_FALSE(in(n[0], n[1], n[2])) << n[0] << "," << n[1];
+}
+
 TEST(DcSocialQuarantineTest, EveryZoneNamesItsMembers)
 {
     // The entry filter is NOT optional here, unlike the scripted-pull volume's.

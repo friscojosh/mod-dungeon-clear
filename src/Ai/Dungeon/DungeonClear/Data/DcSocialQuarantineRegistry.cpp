@@ -127,6 +127,32 @@ namespace
             patrol.entries   = {MGT_SB_SENTINEL};
             t.push_back(patrol);
 
+            // --- Upper Blackrock Spire (fork: friscojosh) -------------------
+            // THE FURNACE's west side, on the way to The Beast. The Rage Talon
+            // Captain leads a groupAI-3 formation (Captain, 2 Fire Tongues, 2 Iron
+            // Guards; leader guid 137861), and a loose Elite / 2 Assassins / Fire
+            // Tongue pack stands 12.2yd from its nearest Iron Guard — inside the
+            // 13.9yd CreatureFamilyAssistanceRadius+reaches allowance at SPAWN, so
+            // the nine are one pull before anything moves. Live (current5), a tag
+            // on that Elite brought all nine and the party had to teleport out.
+            // The Stadium->Beast route stays >=26yd from every member (route probe,
+            // TestUbrsFurnaceRouteProbe), so nothing on the path needs them; the
+            // zone keeps the fights that DO sit on it (the lone Assassin, the
+            // south-west three) from recruiting them. Measured off
+            // acore_world.creature: members within 14.4yd of the centre; nearest
+            // non-member 25.5yd (the entrance formation's Elite).
+            DcQuarantineZone furnaceWest;
+            furnaceWest.mapId     = 229;
+            furnaceWest.bossEntry = 10430;  // The Beast
+            furnaceWest.name      = "Upper Blackrock Spire — the Furnace's west nine (Rage Talon Captain)";
+            furnaceWest.x         = 15.0f;  furnaceWest.y = -462.3f; furnaceWest.z = 111.0f;
+            furnaceWest.radius    = 16.0f;
+            furnaceWest.zBand     = 5.0f;
+            furnaceWest.entries   = {10371 /*Rage Talon Captain*/, 10372 /*Rage Talon Fire Tongue*/,
+                                     10319 /*Blackhand Iron Guard*/, 10317 /*Blackhand Elite*/,
+                                     10318 /*Blackhand Assassin*/};
+            t.push_back(furnaceWest);
+
             return t;
         }();
         return kZones;

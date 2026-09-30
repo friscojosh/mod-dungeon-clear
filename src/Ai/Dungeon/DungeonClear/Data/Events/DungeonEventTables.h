@@ -5356,8 +5356,11 @@ void RegisterDireMaulWings(std::unordered_map<uint32, DungeonWingLayout>& store)
 void RegisterScarletMonasteryWings(std::unordered_map<uint32, DungeonWingLayout>& store);
 void RegisterMaraudonWings(std::unordered_map<uint32, DungeonWingLayout>& store);
 // Blackrock Spire (229) — LBRS / UBRS, chosen per run (WingSelect::Explicit).
-// No events or roster patch yet; lives in BlackrockSpireEvents.cpp.
+// Wings, plus the UBRS Rend/Gyth stadium (event 1 / OBJ(1) / hook 900, fork:
+// friscojosh); lives in BlackrockSpireEvents.cpp.
 void RegisterBlackrockSpireWings(std::unordered_map<uint32, DungeonWingLayout>& store);
+void RegisterBlackrockSpireEvents(std::vector<DungeonEvent>& out);
+void RegisterBlackrockSpireRoster(std::vector<BossRosterPatch>& t);
 // Blackrock Depths (230) — Detention Block / Upper City, chosen per run.
 void RegisterBlackrockDepthsWings(std::unordered_map<uint32, DungeonWingLayout>& store);
 

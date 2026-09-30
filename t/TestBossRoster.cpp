@@ -1716,3 +1716,45 @@ TEST(BossRosterDoneTest, RosterPatchCarriesInstanceDataThroughApply)
     EXPECT_EQ(o->doneInstanceDataValue, 3u);
     EXPECT_EQ(o->doneBossStateIndex, -1);
 }
+
+// Upper Blackrock Spire (fork: friscojosh): the balcony Warchief Rend is only
+// reachable through the stadium exit door his own encounter opens, so the patch
+// removes his row and OBJ(1) at the arena centre stands in for the encounter. It
+// must keep Rend's DBC bit (11), so it sorts between Solakar (10) and The Beast
+// (12), and must complete on his boss-state slot (10), not the bit.
+TEST(BossRosterRegistryTest, UbrsStadiumObjectiveReplacesBalconyRend)
+{
+    EXPECT_TRUE(BossRosterRegistry::HasPatch(229));
+
+    std::vector<DungeonBossInfo> base = {
+        Boss(10264, 10, "Solakar Flamewreath", 229),
+        Boss(10429, 11, "Warchief Rend Blackhand", 229),
+        Boss(10430, 12, "The Beast", 229),
+    };
+    std::vector<DungeonBossInfo> out = BossRosterRegistry::Apply(229, DcDiffKey::Dungeon(DUNGEON_DIFFICULTY_NORMAL), base);
+
+    EXPECT_EQ(Find(out, 10429), nullptr);
+
+    int solakarIdx = -1, stadiumIdx = -1, beastIdx = -1;
+    for (int i = 0; i < (int)out.size(); ++i)
+    {
+        if (out[i].entry == 10264)
+            solakarIdx = i;
+        else if (out[i].entry == 10430)
+            beastIdx = i;
+        else if (out[i].entry == BossRosterRegistry::ObjectiveEntry(1))
+            stadiumIdx = i;
+    }
+
+    ASSERT_NE(solakarIdx, -1);
+    ASSERT_NE(stadiumIdx, -1);
+    ASSERT_NE(beastIdx, -1);
+    EXPECT_LT(solakarIdx, stadiumIdx);
+    EXPECT_LT(stadiumIdx, beastIdx);
+
+    DungeonBossInfo const& stadium = out[stadiumIdx];
+    EXPECT_EQ(stadium.kind, DungeonAnchorKind::Objective);
+    EXPECT_EQ(stadium.encounterIndex, 11u);
+    EXPECT_EQ(stadium.doneBossStateIndex, 10);
+    EXPECT_EQ(stadium.eventId, 1u);
+}

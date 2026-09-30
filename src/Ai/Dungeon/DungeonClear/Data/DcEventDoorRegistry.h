@@ -326,6 +326,15 @@ namespace DcEventDoorRegistry
             // row keeps it refused if a future edit lists lock-free doors more
             // loosely, so nobody walks past Chess to Prince.
             case 184277:  // Karazhan — Gamesman's Hall Exit Door (opens on Chess DONE)
+            // Upper Blackrock Spire (map 229) — the three Blackrock Stadium
+            // portcullises (fork: friscojosh). boss_rend_blackhand / boss_gyth /
+            // the instance drive all three: the entrance shuts on EVENT_START_1
+            // and reopens on Rend's death or reset, the wave gate cycles once per
+            // wave, and the exit is a PASSAGE door on Rend's encounter. A bot
+            // Use() on any of them fights the event (see BlackrockSpireEvents).
+            case 164726:  // UBRS — stadium entrance (GO_GYTH_ENTRY_DOOR)
+            case 175185:  // UBRS — stadium wave gate (GO_DR_PORTCULLIS)
+            case 175186:  // UBRS — stadium exit toward The Beast (GO_GYTH_EXIT_DOOR)
                 return true;
             default:
                 return false;

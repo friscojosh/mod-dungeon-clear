@@ -842,6 +842,7 @@ namespace
             RegisterHallsOfStoneHooks(t);
             RegisterHallsOfLightningHooks(t);
             RegisterUtgardePinnacleHooks(t);
+            RegisterBlackrockSpireHooks(t);
             RegisterPitOfSaronHooks(t);
             RegisterHallsOfReflectionHooks(t);
             RegisterCullingOfStratholmeHooks(t);

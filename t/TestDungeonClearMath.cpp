@@ -205,19 +205,57 @@ TEST(DungeonClearDynamicPullTest, NotEligibleNotCounted)
     EXPECT_EQ(Count(mobs, 0), 1u);  // packmate gated out
 }
 
-// One assist hop, no transitivity. A is the target; B aggros from proximity; C is
-// within assistRadius of B (a seed mob) -> joins; D is within assistRadius of C
-// only (NOT of any seed) -> must NOT join, because assisted mobs don't chain.
-TEST(DungeonClearDynamicPullTest, AssistHopIsExactlyOneRing)
+// Assist CHAINS (fork: friscojosh; this test used to pin "exactly one ring").
+// A is the target; B aggros from proximity; C is within assist range of B and
+// joins; D is within assist range of C only — and joins too, because C calls
+// CallAssistance the moment it enters the fight, exactly as B did. Proximity is
+// still single-ring (E below, near D but only proximity-close to nobody, stays
+// out), because a fixed camp does not move.
+TEST(DungeonClearDynamicPullTest, AssistChainsTransitively)
 {
     std::vector<DynPullMob> mobs = {
         {0.0f, 0.0f, 0.0f, false, 0u, kReach},   // A target
         {3.0f, 0.0f, 0.0f, true, 0u, kReach},    // B proximity-aggros (seed)
-        {11.0f, 0.0f, 0.0f, true, 0u, 1.0f},     // C: 8yd from B (<=assist 10) -> hop
-        {20.0f, 0.0f, 0.0f, true, 0u, 1.0f}      // D: 9yd from C, 17yd from B -> NO
+        {11.0f, 0.0f, 0.0f, true, 0u, 1.0f},     // C: 8yd from B -> assists
+        {20.0f, 0.0f, 0.0f, true, 0u, 1.0f},     // D: 9yd from C -> assists C
+        {45.0f, 0.0f, 0.0f, true, 0u, 1.0f}      // E: 25yd from D -> no link
     };
-    // tiny reach on C/D means they cannot proximity-aggro the camp themselves.
-    EXPECT_EQ(Count(mobs, 0), 3u);  // A + B + C, NOT D
+    // tiny reach on C/D/E means they cannot proximity-aggro the camp themselves.
+    EXPECT_EQ(Count(mobs, 0), 4u);  // A + B + C + D, NOT E
+}
+
+// The engine adds BOTH combat reaches to the assistance radius (3D). Two ~2yd-reach
+// elites 12.2yd apart are linked (10 + 1.95 + 1.95 = 13.9); a reach-less test
+// would have said no. This is UBRS's Furnace: the Elite at (20.7,-468.8) and the
+// Captain formation's Iron Guard at (11.7,-460.5).
+TEST(DungeonClearDynamicPullTest, AssistRangeAddsBothCombatReaches)
+{
+    std::vector<DynPullMob> linked = {
+        {20.7f, -468.8f, 111.0f, false, 0u, 1.0f, false, true, 1.95f},
+        {11.7f, -460.5f, 111.0f, true,  0u, 1.0f, false, true, 1.95f},
+    };
+    EXPECT_EQ(Count(linked, 0), 2u);
+
+    // Without reach (the old model) the same pair reads as separate.
+    std::vector<DynPullMob> reachless = linked;
+    reachless[0].combatReach = reachless[1].combatReach = 0.0f;
+    EXPECT_EQ(Count(reachless, 0), 1u);
+}
+
+// A formation pulled in by assist brings ALL its members, and every one of them
+// calls for help from its own spot — so a neighbour next to the formation's far
+// member joins even though it is nowhere near the target. The Furnace west nine:
+// tag the Elite and the Captain's whole formation follows, then its neighbours.
+TEST(DungeonClearDynamicPullTest, AssistedFormationMembersCallToo)
+{
+    std::vector<DynPullMob> mobs = {
+        {0.0f,  0.0f, 0.0f, false, 0u, 1.0f, false, true, 2.0f},  // target
+        {12.0f, 0.0f, 0.0f, true,  5u, 1.0f, false, true, 2.0f},  // formation 5, near target
+        {40.0f, 0.0f, 0.0f, true,  5u, 1.0f, false, true, 2.0f},  // formation 5, far end
+        {52.0f, 0.0f, 0.0f, true,  0u, 1.0f, false, true, 2.0f},  // 12yd from the far end
+        {80.0f, 0.0f, 0.0f, true,  0u, 1.0f, false, true, 2.0f},  // 28yd on: no link
+    };
+    EXPECT_EQ(Count(mobs, 0), 4u);
 }
 
 // 3D: a mob within aggro reach in plan view but a full floor (20yd) ABOVE the

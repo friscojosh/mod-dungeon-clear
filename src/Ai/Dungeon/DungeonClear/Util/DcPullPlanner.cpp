@@ -507,7 +507,8 @@ bool DcPullPlanner::ClassifyPullAdvanced(PlayerbotAI* botAI, Unit* target,
             elite = c->isElite();
         }
         mobs.push_back({u->GetPositionX(), u->GetPositionY(), u->GetPositionZ(),
-                        chainEligible, packIds[i], aggroReach, patroller, elite});
+                        chainEligible, packIds[i], aggroReach, patroller, elite,
+                        u->GetCombatReach()});
     }
 
     // DC_Z_LEVEL_TOLERANCE: a mob more than this far above/below is on another

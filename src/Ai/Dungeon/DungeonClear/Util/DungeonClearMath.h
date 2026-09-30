@@ -248,6 +248,9 @@ namespace DungeonClearMath
         float         aggroReach = 0.0f;
         bool          patroller = false;
         bool          elite = false;
+        // Creature::GetCombatReach. Added on BOTH sides of the assist test, as the
+        // engine does (fork: friscojosh). 0 reproduces the old reach-less reach.
+        float         combatReach = 0.0f;
     };
 
     // Pure Dynamic-pull estimate: how many mobs aggro if the party Leeroys on top
@@ -259,11 +262,11 @@ namespace DungeonClearMath
     //     Spread` (2D), on the same level (`zTolerance`), and `chainEligible`.
     //     `combatSpread` widens the camp from a point to a disc to model players
     //     drifting to flank/kite during the fight.
-    //   - One assist hop: a `chainEligible` mob within `assistRadius` (2D, same
-    //     level) of a SEED mob joins via CallForHelp. Proximity aggro from a fixed
-    //     camp does not chain, so assisted mobs do NOT seed further proximity or
-    //     assist — exactly one ring.
-    //   - Formation closure: any pack touched by the set is counted in full.
+    //   - Assist, transitively: a `chainEligible` mob within `assistRadius` + both
+    //     `combatReach`es (3D, same level) of ANY counted mob joins, and then calls
+    //     in turn; any pack touched is counted in full and its members call too.
+    //     Proximity does NOT chain (a fixed camp) — only assist does, as in the
+    //     engine (Unit::Attack -> CallAssistance per engaging creature).
     // `zTolerance` keeps the estimate honest in multi-level rooms: WotLK inter-
     // floor gaps exceed it, so a mob a ramp above/below never counts. Separated
     // from the game-state resolution in DcPullPlanner::ClassifyPullAdvanced so

@@ -582,7 +582,8 @@ bool DcEngageGeometry::EnRouteSweepApplies(Player* bot)
     // raid — whose raw difficulty is also 1 — is not misread as heroic.
     if (map->IsHeroic())
         return false;
-    return RouteSweepRegistry::SweepsRoute(map->GetId());
+    return RouteSweepRegistry::SweepsRouteAt(map->GetId(), bot->GetPositionX(), bot->GetPositionY(),
+                                             bot->GetPositionZ());
 }
 
 bool DcEngageGeometry::TargetInsideBystanderPack(Player* bot, Unit* target)

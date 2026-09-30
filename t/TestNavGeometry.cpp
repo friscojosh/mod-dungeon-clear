@@ -661,6 +661,20 @@ TEST(DcRouteSweepRegistryTest, OnlyTheStockadeAndKarazhanSweep)
     EXPECT_FALSE(RouteSweepRegistry::SweepsRoute(0));    // not a dungeon at all
 }
 
+// Region rows (fork: friscojosh): UBRS sweeps in The Furnace only. Map 229 as a
+// whole stays off, so LBRS and the rest of UBRS keep the ordinary Dynamic pull.
+TEST(DcRouteSweepRegistryTest, UbrsSweepsOnlyInTheFurnace)
+{
+    EXPECT_FALSE(RouteSweepRegistry::SweepsRoute(229));
+    EXPECT_TRUE(RouteSweepRegistry::SweepsRouteAt(229, 54.7f, -472.1f, 110.9f));   // the camp that died
+    EXPECT_TRUE(RouteSweepRegistry::SweepsRouteAt(229, 124.2f, -563.8f, 107.4f));  // The Beast
+    EXPECT_FALSE(RouteSweepRegistry::SweepsRouteAt(229, 153.8f, -419.8f, 110.9f)); // stadium floor
+    EXPECT_FALSE(RouteSweepRegistry::SweepsRouteAt(229, 155.3f, -286.1f, 70.9f));  // Dragonspire Hall
+    EXPECT_FALSE(RouteSweepRegistry::SweepsRouteAt(229, 54.7f, -472.1f, 60.0f));   // another floor
+    EXPECT_FALSE(RouteSweepRegistry::SweepsRouteAt(230, 54.7f, -472.1f, 110.9f));  // another map
+    EXPECT_TRUE(RouteSweepRegistry::SweepsRouteAt(34, 0.0f, 0.0f, 0.0f));          // whole-map rows still win
+}
+
 // The engage handoff and direct pursuit both stand down while an anchored hop
 // between the route cursor and the boss anchor is still out of reach
 // (tr-20260923-235223-3: pursuit bee-lined past Attumen's west-mouth route).

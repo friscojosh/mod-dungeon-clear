@@ -39,48 +39,10 @@ namespace
     };
 }
 
-namespace
-{
-    // Region rows (fork: friscojosh): the sweep for one part of a map only, an
-    // axis-aligned box on world coordinates. Measured off acore_world.creature.
-    //
-    //   229 — Upper Blackrock Spire, THE FURNACE (Rend's stadium exit to The
-    //   Beast). 34 spawns — Blackhand Iron Guards, Assassins and Elites, Rage Talon
-    //   Dragon Guards, Fire Tongues and a Captain — packed across x 7-172, y -441 to
-    //   -567 on one z~107-122 floor, so most packs stand inside a neighbour's reach.
-    //   Live (2026-09-30), the tank classified them LEEROY, fought them where they
-    //   stood and died mid-pull at camp (54.7,-472.1). The box pads that spread by
-    //   ~5-10yd so the verdict is armed from first sight on the walk in from the
-    //   stadium exit (93,-436); z 100-126 keeps the stadium floor's own fight out.
-    //   The only other creatures inside it are Rend and Nefarius on the balcony,
-    //   which nothing pulls. The rest of BRS (LBRS and the UBRS halls) keeps the
-    //   ordinary Dynamic pull.
-    struct SweepRegion
-    {
-        uint32 mapId;
-        float minX, maxX, minY, maxY, minZ, maxZ;
-    };
-    SweepRegion const kSweepRegions[] =
-    {
-        { 229, -5.0f, 180.0f, -585.0f, -432.0f, 100.0f, 126.0f },  // UBRS — The Furnace
-    };
-}
-
 bool RouteSweepRegistry::SweepsRoute(uint32 mapId)
 {
     for (uint32 const id : kSweepMaps)
         if (id == mapId)
-            return true;
-    return false;
-}
-
-bool RouteSweepRegistry::SweepsRouteAt(uint32 mapId, float x, float y, float z)
-{
-    if (SweepsRoute(mapId))
-        return true;
-    for (SweepRegion const& r : kSweepRegions)
-        if (r.mapId == mapId && x >= r.minX && x <= r.maxX && y >= r.minY && y <= r.maxY &&
-            z >= r.minZ && z <= r.maxZ)
             return true;
     return false;
 }

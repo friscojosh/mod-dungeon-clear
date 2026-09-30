@@ -44,12 +44,6 @@ public:
     // True when `mapId` is on the list. Pure (no game state) so it is unit
     // testable on its own. Linear scan; the table is tiny.
     static bool SweepsRoute(uint32 mapId);
-
-    // True when the whole map sweeps (SweepsRoute) OR (x,y,z) lies inside one of
-    // the map's REGION rows — a room or wing whose geometry earned the sweep
-    // where the rest of the dungeon did not (fork: friscojosh; UBRS's Furnace is
-    // the first). Pure, like SweepsRoute.
-    static bool SweepsRouteAt(uint32 mapId, float x, float y, float z);
 };
 
 #endif  // _PLAYERBOT_ROUTESWEEPREGISTRY_H

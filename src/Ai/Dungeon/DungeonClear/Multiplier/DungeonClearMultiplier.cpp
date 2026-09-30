@@ -18,6 +18,7 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcBossStandDown.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcEscapeLeap.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcFlightLeg.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcGapCloser.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcOculusPlan.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcSmartRest.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearUtil.h"
@@ -174,6 +175,26 @@ static bool OculusDrakeAttackUnsafe(Player* bot, PlayerbotAI* botAI, AiObjectCon
     return target && !DcFlightLeg::IsFlyingSafe(target);
 }
 
+// FOLLOWER GAP-CLOSERS (fork: friscojosh). While a dungeon-clear run is active,
+// a party member other than the DC tank never uses a gap-closer: Charge and
+// Intercept (warrior), Feral Charge (druid) or Death Grip (death knight). Each
+// covers up to 25-30yd in a straight line at the bot's own target, so the bot
+// lands wherever that mob is standing — next to the pack beside it, or halfway
+// back down the tank's drag lane — and the new neighbours join (live, UBRS's
+// Furnace: the warrior Charged the tank's pull and brought adds). Death Grip is
+// the same problem the other way round: it yanks a mob to the bot off its pack.
+// The follower walks into the tank's fight instead, which is where the camp and
+// the pull machinery already put it. Intervene (to an ally) is not on the list.
+// Gated like the follow-master block below: the cross-bot PartyTank value, so it
+// holds for every member of an unpaused run and lifts when the run is off/paused.
+static bool FollowerGapCloserBanned(Player* bot, AiObjectContext* context, std::string const& name)
+{
+    if (!DcGapCloser::IsGapCloser(name))
+        return false;
+    Player* tank = context->GetValue<Player*>(DcKey::PartyTank)->Get();
+    return tank && tank != bot;
+}
+
 float DungeonClearMultiplier::GetValue(Action* action)
 {
     if (!action || !botAI || !bot)
@@ -195,6 +216,10 @@ float DungeonClearMultiplier::GetValue(Action* action)
     if (OculusMountBanned(bot, name))
         return 0.0f;
     if (OculusDrakeAttackUnsafe(bot, botAI, context, name))
+        return 0.0f;
+
+    // Stock class actions, so above the fast path. See FollowerGapCloserBanned.
+    if (FollowerGapCloserBanned(bot, context, name))
         return 0.0f;
 
     // Rest-target cap. Applies to EVERY bot in an active DC run — the leader tank
@@ -394,6 +419,10 @@ float DungeonClearCombatMultiplier::GetValue(Action* action)
     if (OculusMountBanned(bot, name))
         return 0.0f;
     if (OculusDrakeAttackUnsafe(bot, botAI, context, name))
+        return 0.0f;
+
+    // Stock class actions, so above the fast path. See FollowerGapCloserBanned.
+    if (FollowerGapCloserBanned(bot, context, name))
         return 0.0f;
 
     // RAID BOSS STAND-DOWN — the one shared check that makes every DC combat

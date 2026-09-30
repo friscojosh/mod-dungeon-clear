@@ -473,3 +473,22 @@ TEST(DcRunWingTest, BaelGarCompletesTheDetentionBlockAndThaurissanTheUpperCity)
     // Bael'Gar is not in an Upper City list.
     EXPECT_FALSE(DcRunWing::TerminalDone(db, ucList, 1u << 8, true));
 }
+
+// Follower gap-closer veto (fork: friscojosh): the name classifier behind it.
+#include "Ai/Dungeon/DungeonClear/Util/DcGapCloser.h"
+
+TEST(DcGapCloserTest, ClassifiesGapClosersAndNothingElse)
+{
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("charge"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("intercept"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("intercept on enemy healer"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("feral charge - bear"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("feral charge - cat"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("death grip"));
+
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("intervene"));       // to an ally
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("heroic strike"));
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("chargeup"));         // prefix, not the spell
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("dps assist"));
+    EXPECT_FALSE(DcGapCloser::IsGapCloser(""));
+}

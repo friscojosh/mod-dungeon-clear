@@ -83,7 +83,7 @@ TEST(DcRunWingTest, BlackrockSpireIsAnExplicitTwoWingLayout)
     EXPECT_EQ(lbrs->terminalBossEntry, 9568u);    // Overlord Wyrmthalak
     EXPECT_EQ(ubrs->terminalBossEntry, 10363u);   // General Drakkisath
     EXPECT_EQ(lbrs->bossEntries.size(), 9u);      // incl. Urok, Gizrul
-    EXPECT_EQ(ubrs->bossEntries.size(), 15u);     // incl. Solakar + 10 objectives (stadium, hall registration, 7 runes, altar)
+    EXPECT_EQ(ubrs->bossEntries.size(), 16u);     // incl. Solakar + 11 objectives (stadium, hall registration, 7 runes, altar, Beast approach)
     // The Rend/Gyth stadium objective (OBJ(1), fork: friscojosh) must be a UBRS
     // entry, or FilterToWing drops it and the clear routes to the balcony Rend.
     EXPECT_NE(std::find(ubrs->bossEntries.begin(), ubrs->bossEntries.end(),

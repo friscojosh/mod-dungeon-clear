@@ -104,14 +104,16 @@ namespace
     constexpr int32 UBRS_ORDER_EMBERSEER = 19;
     constexpr int32 UBRS_ORDER_SOLAKAR = 20;
     constexpr int32 UBRS_ORDER_STADIUM = 21;
-    constexpr int32 UBRS_ORDER_BEAST = 22;
-    constexpr int32 UBRS_ORDER_DRAKKISATH = 23;
+    constexpr int32 UBRS_ORDER_BEAST_APPROACH = 22;
+    constexpr int32 UBRS_ORDER_BEAST = 23;
+    constexpr int32 UBRS_ORDER_DRAKKISATH = 24;
 
     constexpr uint32 UBRS_NPC_EMBERSEER = 9816;
     constexpr uint32 UBRS_NPC_SOLAKAR = 10264;
     constexpr uint32 UBRS_NPC_BEAST = 10430;
     constexpr uint32 UBRS_NPC_DRAKKISATH = 10363;
     constexpr uint32 UBRS_BIT_EMBERSEER = 9;
+    constexpr uint32 UBRS_BIT_BEAST = 12;
     constexpr uint32 UBRS_STATE_EMBERSEER = 9;    // DATA_PYROGAURD_EMBERSEER slot
 
     // --- the DRAGONSPIRE HALL runes ------------------------------------------
@@ -192,6 +194,32 @@ namespace
     constexpr float UBRS_ALTAR_Z = 91.5f;
     constexpr float UBRS_ALTAR_HOLD = 20.0f;  // the whole room, altar to cage
     constexpr uint32 UBRS_EMBERSEER_TIMEOUT_MS = 900000;
+
+    // --- THE BEAST's approach ---------------------------------------------------
+    // boss_the_beast runs two area triggers on the corridor out of the Furnace:
+    //   * AT 2067 at_the_beast_room (26.5,-522.5, r15): the Blackhand Elites (10317)
+    //     within 50y of him go REACT_PASSIVE, run for (34.2,-536.9) after 3s and
+    //     cast Suicide after 9s — scripted set dressing, not a fight;
+    //   * AT 2066 at_trigger_the_beast_movement (75.3,-547.7, r30): The Beast
+    //     starts waypoint path 1379690 on repeat — a loop from his room, through
+    //     its mouth and round the corridor (x 17-118, y -514..-561) — so he comes
+    //     to the party. He evades north of y -505 (his leash), which the loop and
+    //     every point below stay south of.
+    // Live (current6), the tank walked on through both, met the two passive,
+    // fleeing Elites at the room mouth and attacked them; The Beast's patrol then
+    // walked into that fight ("OBJECTIVE JOINED AN ONGOING FIGHT") and the mage
+    // died. So the stop before him: stand on the route inside AT 2067 — firing
+    // the escorts' script — and wait out its 9s before going on and crossing AT
+    // 2066. The spot is the route's own polyline vertex (TestUbrsFurnaceRouteProbe),
+    // so it is on the mesh; 13.8y from 2067's centre and 50y from 2066's, so it
+    // wakes the escorts and not the boss. Done by The Beast's slot (12).
+    constexpr uint32 UBRS_EV_BEAST_APPROACH = 11;
+    constexpr uint32 UBRS_BEAST_APPROACH_OBJ_SEQ = 11;
+    constexpr uint32 UBRS_STATE_BEAST = 12;  // DATA_THE_BEAST slot
+    constexpr float UBRS_BEAST_HOLD_X = 36.3f;
+    constexpr float UBRS_BEAST_HOLD_Y = -512.8f;
+    constexpr float UBRS_BEAST_HOLD_Z = 111.5f;
+    constexpr uint32 UBRS_BEAST_ESCORT_WAIT_MS = 13000;  // 3s run-off + 6s to Suicide, + margin
 
     // EnsureStadiumStarted (hook 900): fires the real area trigger from the
     // leader until Rend's slot is at least IN_PROGRESS. The core range-checks the
@@ -286,6 +314,15 @@ void RegisterBlackrockSpireEvents(std::vector<DungeonEvent>& out)
                 .Build());
 
     out.push_back(
+        EventBuilder(UBRS_MAP, UBRS_EV_BEAST_APPROACH, "The Beast: let his escorts run off")
+            .Anchored(/*orderIndex, doc-only*/ UBRS_EV_BEAST_APPROACH)
+            // 1. Onto the route inside AT 2067 (fires the escorts' flee + Suicide).
+            .MoveTo(UBRS_BEAST_HOLD_X, UBRS_BEAST_HOLD_Y, UBRS_BEAST_HOLD_Z, /*radius*/ 4.0f)
+            // 2. Stand still while they die, instead of walking on into them.
+            .Wait(UBRS_BEAST_ESCORT_WAIT_MS)
+            .Build());
+
+    out.push_back(
         EventBuilder(UBRS_MAP, UBRS_EV_ALTAR, "Pyroguard Emberseer: Blackrock Altar")
             .Anchored(/*encounterIndex*/ UBRS_BIT_EMBERSEER)
             .Persistent()  // the Incarcerators and Emberseer are several combat gaps
@@ -354,6 +391,14 @@ void RegisterBlackrockSpireRoster(std::vector<BossRosterPatch>& t)
     altar.doneBossStateIndex = UBRS_STATE_EMBERSEER;
     p.add.push_back(altar);
 
+    DungeonBossInfo beastApproach = MakeObjective(OBJ(UBRS_BEAST_APPROACH_OBJ_SEQ), UBRS_BIT_BEAST, UBRS_MAP,
+                                                  "The Beast: let his escorts run off",
+                                                  UBRS_BEAST_HOLD_X, UBRS_BEAST_HOLD_Y, UBRS_BEAST_HOLD_Z,
+                                                  /*arriveRadius*/ 6.0f, /*gateEntry*/ 0, /*hook*/ 0,
+                                                  UBRS_EV_BEAST_APPROACH, UBRS_ORDER_BEAST_APPROACH);
+    beastApproach.doneBossStateIndex = UBRS_STATE_BEAST;
+    p.add.push_back(beastApproach);
+
     // The real bosses keep their DBC kill-bits; only their place in the order moves.
     p.reorder = {
         { UBRS_NPC_EMBERSEER, UBRS_ORDER_EMBERSEER },
@@ -412,6 +457,7 @@ void RegisterBlackrockSpireWings(std::unordered_map<uint32, DungeonWingLayout>& 
             DcRoster::OBJ(6), DcRoster::OBJ(7), DcRoster::OBJ(8),                    // Hall runes (events 2-8)
             DcRoster::OBJ(UBRS_ALTAR_OBJ_SEQ),     // Blackrock Altar objective (event 9)
             DcRoster::OBJ(UBRS_HALL_REGISTER_OBJ_SEQ),  // Dragonspire Hall pack registration (event 10)
+            DcRoster::OBJ(UBRS_BEAST_APPROACH_OBJ_SEQ), // The Beast's approach (event 11)
             10430,  // The Beast
             10363,  // General Drakkisath
         }, "ubrs", /*lfgDungeonId*/ 44, /*terminalBossEntry*/ 10363, /*encounterMask*/ 0x3E00u},

@@ -1812,6 +1812,12 @@ TEST(BossRosterRegistryTest, UbrsRunesThenAltarPrecedeEmberseer)
     EXPECT_EQ(reg->eventId, 10u);
     EXPECT_EQ(&out.front(), reg);
 
+    // The Beast's approach stop comes right before him, done by his slot (12).
+    DungeonBossInfo const* approach = Find(out, BossRosterRegistry::ObjectiveEntry(11));
+    ASSERT_NE(approach, nullptr);
+    EXPECT_EQ(approach->doneBossStateIndex, 12);
+    EXPECT_EQ(approach + 1, &out[beastIdx]);
+
     for (std::size_t i = 1; i < keys.size(); ++i)
         EXPECT_LT(keys[i - 1], keys[i]) << "UBRS anchors " << i - 1 << " and " << i << " share an order key";
 }

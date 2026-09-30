@@ -153,6 +153,16 @@ namespace
                                      10318 /*Blackhand Assassin*/};
             t.push_back(furnaceWest);
 
+            // The same nine on the way to Drakkisath. With The Beast dead the zone
+            // above retires, and the route north out of the Furnace walks past
+            // them again: live (current8) the tank came within 20yd of their Iron
+            // Guard at (22.3,-478.3) and all nine joined as late arrivals. A zone
+            // gates on ONE boss, so the Drakkisath leg is its own row.
+            DcQuarantineZone furnaceWestDrakk = furnaceWest;
+            furnaceWestDrakk.bossEntry = 10363;  // General Drakkisath
+            furnaceWestDrakk.name      = "Upper Blackrock Spire — the Furnace's west nine (Drakkisath leg)";
+            t.push_back(furnaceWestDrakk);
+
             return t;
         }();
         return kZones;

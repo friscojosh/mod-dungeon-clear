@@ -143,14 +143,15 @@ TEST(DcSocialQuarantineTest, OnlyMagistersTerraceHasZones)
     EXPECT_TRUE(DcSocialQuarantineRegistry::Zones(MGT, 24744).empty());  // Vexallus
 }
 
-// Upper Blackrock Spire (fork: friscojosh): one zone, the Furnace's west nine,
-// gated on The Beast only. It must hold all nine spawns and no neighbour.
+// Upper Blackrock Spire (fork: friscojosh): the Furnace's west nine, zoned on The
+// Beast's leg and again on Drakkisath's (the route north passes them too), and
+// never on Emberseer's. The cylinder must hold all nine spawns and no neighbour.
 TEST(DcSocialQuarantineTest, UbrsFurnaceWestNineOnly)
 {
     constexpr uint32 UBRS = 229;
-    ASSERT_EQ(DcSocialQuarantineRegistry::AllZones(UBRS).size(), 1u);
+    ASSERT_EQ(DcSocialQuarantineRegistry::AllZones(UBRS).size(), 2u);
     ASSERT_EQ(DcSocialQuarantineRegistry::Zones(UBRS, 10430).size(), 1u);  // The Beast
-    EXPECT_TRUE(DcSocialQuarantineRegistry::Zones(UBRS, 10363).empty());   // Drakkisath
+    ASSERT_EQ(DcSocialQuarantineRegistry::Zones(UBRS, 10363).size(), 1u);  // Drakkisath (the same nine)
     EXPECT_TRUE(DcSocialQuarantineRegistry::Zones(UBRS, 9816).empty());    // Emberseer
 
     DcQuarantineZone const& z = *DcSocialQuarantineRegistry::Zones(UBRS, 10430).front();

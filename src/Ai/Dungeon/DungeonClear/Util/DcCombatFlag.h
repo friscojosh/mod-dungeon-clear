@@ -102,6 +102,19 @@ namespace DcCombatFlag
     // hostile AREA AURA holds the flag from 45yd with nothing on us, and no
     // radius a fight actually happens at will admit it.
     bool IsHeldByLiveEnemy(Player* p, float radius);
+
+    // Does a living, non-evading BOSS within DC_ENGAGEMENT_RADIUS hold us in
+    // combat (fork: friscojosh)? No pathfind — flag reads and a distance only.
+    //
+    // The phantom-combat breaker's raid stand-down does not cover a 5-man boss,
+    // and a 5-man boss's own kit can make one bot look exactly phantom: UBRS's The
+    // Beast fears everyone within 10yd (Terrifying Roar clears the victim),
+    // Berserker-Charges a random player 350 units away and then chases whoever he
+    // likes. Live (current7) the tank sat with no attacker, no victim and The Beast
+    // 69yd off chasing someone else; the breaker ran out its timer and
+    // `.combatstop`ped the TANK — every point of threat gone — and the healer
+    // before it. A boss reference is never the stale kind the breaker exists for.
+    bool HeldByLiveBoss(Player* p);
     bool AnyPartyHeldByLiveEnemy(Player* bot, float radius);
 
     // May a DC rung own this tick? True when not flagged at all, and true again

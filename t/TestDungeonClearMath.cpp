@@ -1581,6 +1581,18 @@ TEST(DungeonClearStuckCombatTest, TriggerCreatureIsNeverAResolvableHolder)
     EXPECT_FALSE(DungeonClearMath::IsUnresolvableCombatHolder(true, false));
 }
 
+// Boss combat holders (fork: friscojosh): any of the core's three boss markings
+// makes a holder a boss; none of them, or a non-creature, does not.
+TEST(DungeonClearMathTest, BossCombatHolderAnyOfThreeMarkings)
+{
+    EXPECT_TRUE(DungeonClearMath::IsBossCombatHolder(true, false, false, 3));   // The Beast: rank only
+    EXPECT_TRUE(DungeonClearMath::IsBossCombatHolder(true, true, false, 1));    // BOSS_MOB type flag
+    EXPECT_TRUE(DungeonClearMath::IsBossCombatHolder(true, false, true, 1));    // dungeon-boss extra flag
+    EXPECT_FALSE(DungeonClearMath::IsBossCombatHolder(true, false, false, 1));  // elite trash
+    EXPECT_FALSE(DungeonClearMath::IsBossCombatHolder(true, false, false, 2));  // rare elite
+    EXPECT_FALSE(DungeonClearMath::IsBossCombatHolder(false, true, true, 3));   // not a creature
+}
+
 TEST(DungeonClearStuckCombatTest, NonCreatureHoldersStayResolvable)
 {
     // A PLAYER holder is never "unresolvable" — the trigger flag is a creature

@@ -668,6 +668,16 @@ namespace DungeonClearMath
         return isCreature && isTrigger;
     }
 
+    // Is this combat holder a BOSS (fork: friscojosh)? Any of the core's three
+    // markings: the BOSS_MOB type flag (isWorldBoss), the dungeon-boss extra flag
+    // (IsDungeonBoss), or boss rank (CREATURE_ELITE_WORLDBOSS = 3; UBRS's The Beast
+    // carries only this one). A boss holding us is a real fight however it looks
+    // from one bot: see HeldByLiveBoss in DcCombatFlag.
+    inline bool IsBossCombatHolder(bool isCreature, bool bossMobFlag, bool dungeonBoss, uint32 rank)
+    {
+        return isCreature && (bossMobFlag || dungeonBoss || rank == 3);
+    }
+
     // "Can this follower attack from where it stands?" for the camp-assist handoff,
     // expressed in the SAME metric the stock reach action enforces.
     //

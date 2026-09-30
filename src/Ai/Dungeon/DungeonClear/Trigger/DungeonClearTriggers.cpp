@@ -1894,6 +1894,16 @@ bool DungeonClearBreakStuckCombatTrigger::IsActive()
         return false;
     }
 
+    // A dungeon BOSS holding us is a real fight, never phantom — however it looks
+    // from this one bot (feared, knocked away, the boss chasing someone else). The
+    // raid stand-down above does not reach a 5-man boss. See HeldByLiveBoss.
+    if (DcCombatFlag::HeldByLiveBoss(bot))
+    {
+        stuckCombatSinceMs = 0;
+        holderCloseWatch.Reset();
+        return false;
+    }
+
     // Phantom signature: nothing meleeing us, no victim of our own, and no unit holding
     // us in combat that is both LEGITIMATE (reachable, alive, non-evading, allowed by
     // its own AI to attack us — or the opaque no-reference case) and PROSECUTING the

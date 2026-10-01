@@ -45,6 +45,7 @@
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
 #include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -214,16 +215,38 @@ TEST(PitOfSaronRouteProbe, GateStandPointsAreInsideTheirOwnSpheresAndTheLedgeIsO
         << "the arena stand point is outside half the boss's vertical leash band";
 }
 
-// The staging point the ARM state holds the party on must be clear of gate 1's
-// sphere on every bearing, or the hold is not a hold at all.
-TEST(PitOfSaronRouteProbe, TheArmStagingPointIsClearOfGateOne)
+// Where the ARM state holds the party while the Krick outro runs (~85-100s).
+//
+// This used to demand the hold sit >= radius + leash + 20yd clear of areatrigger 5578's sphere. The
+// hold was then moved on purpose (see STAGE_* in DungeonEventTables.h): from the arena middle to the
+// flat plain south of the gauntlet, because resuming from the arena dragged the linear escort spline
+// through the rock of the shoulder. That put it 0.73yd INSIDE the sphere's rim, and the old
+// assertion has failed ever since.
+//
+// Being inside early is inert, for bots AND for a real player whose client does fire the trigger:
+// 5578 is a repeatable SmartTrigger whose only action is SetData(1, 1) on the Tyrannus event NPC
+// (smart_scripts entryorguid 5578), and npc_pos_tyrannus_eventsAI::SetData returns without
+// touching any state unless the Krick scene has finished AND that NPC already stands on
+// PTSTyrannusWaitPos1 (pit_of_saron.cpp). So what the hold must guarantee is:
+//   * it is on the sphere's RIM, not deep in it — a later move must not walk it towards the
+//     centre unnoticed;
+//   * it is well clear of where the gauntlet ambush lands: the ramp above gate 1.
+TEST(PitOfSaronRouteProbe, TheArmStagingPointIsOnTheRimAndClearOfTheAmbush)
 {
     float const d = Dist3(STAGE_X, STAGE_Y, STAGE_Z, AT_WARN_1_X, AT_WARN_1_Y, AT_WARN_1_Z);
-    EXPECT_GT(d, AT_WARN_1_R + STAGE_LEASH + 20.0f)
-        << "the ARM staging point is only " << d << "yd from areatrigger " << AREATRIGGER_WARN_1
-        << " (radius " << AT_WARN_1_R
-        << "). The whole point of that state is to keep the party OUT of the ambush trigger for"
-           " the 85-100s the Krick outro needs to fly the orchestrator into position.";
+    EXPECT_GT(d, AT_WARN_1_R - 2.0f)
+        << "the ARM staging point is " << d << "yd from areatrigger " << AREATRIGGER_WARN_1
+        << "'s centre (radius " << AT_WARN_1_R << ") — no longer on the rim";
+
+    std::vector<WaypointHint> const* gauntlet = GauntletRoute();
+    ASSERT_NE(gauntlet, nullptr) << "no authored Krick -> ledge route on map 658";
+    float nearestRamp = 1e9f;
+    for (WaypointHint const& w : *gauntlet)
+        if (w.z > GATE_1_Z + 5.0f)   // the ramp climbing past gate 1, where the ambush lands
+            nearestRamp = std::min(nearestRamp, Dist3(STAGE_X, STAGE_Y, STAGE_Z, w.x, w.y, w.z));
+    EXPECT_GT(nearestRamp, 45.0f)
+        << "the ARM staging point is only " << nearestRamp << "yd from the ramp above gate 1, "
+           "where the gauntlet ambush lands";
 }
 
 // Every authored anchor must be somewhere a bot can actually stand.

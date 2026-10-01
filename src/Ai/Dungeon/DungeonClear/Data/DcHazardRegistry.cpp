@@ -693,10 +693,27 @@ namespace
     // Guard (17461 normal, SmartAI on-death SetData 2) or Porung (20923 heroic,
     // boss_porung::JustDied) cancels the scout's whole scheduler — waves and
     // arrows together. See ShatteredHallsEvents.cpp, which sequences exactly that.
-    constexpr std::array<DcTrapHazard, 1> kTrapHazards = {{
-        //                   radius  zBand  vacate  hold  slack
+    // Blackrock Spire (map 229), gameobject 175124 "Rookery Egg" — 222 spawns,
+    // 149 of them in the UBRS Rookery (x 49-108, y -338..-247, z 91-97) laid in
+    // tight clutches (median nearest-neighbour 1.9yd), the rest round the stadium
+    // rim at z 111. gameobject_template: type 6 (TRAP), Data2 diameter 3, Data3
+    // spell 15745 "Summon Rookery Whelp", Data4 type 1 (spent on firing). So any
+    // player who steps within ~1.5yd (plus body reach) of an egg hatches a whelp,
+    // and walking through a clutch hatches the clutch. A healer repositioning to
+    // keep the tank in range used to stand right in one.
+    //
+    // radius 4: the trigger plus ~2.5yd margin. Measured on the spawn data it
+    // covers ~48% of the Rookery's bounding box, i.e. the clutches and not the
+    // open floor between them, so a standoff point is still always available.
+    // vacate 2 (the trigger reach) + hold 2 = in danger inside 4yd, matching the
+    // placement radius; slack 4.5 aims the step-back at 6.5yd, outside `radius`.
+    // Ranged-only vacate: the melee fight the hatchlings where they stand.
+    constexpr std::array<DcTrapHazard, 2> kTrapHazards = {{
+        //                   radius  zBand  vacate  hold  slack  rangedOnly
         // Blaze — the 60s fire patch a flame arrow leaves on the gauntlet floor.
-        { 540, 181915, 5.0f, 6.0f, 3.5f, 2.0f, 6.0f },
+        { 540, 181915, 5.0f, 6.0f, 3.5f, 2.0f, 6.0f, false },
+        // Rookery Egg — hatches a whelp on anyone within reach.
+        { 229, 175124, 4.0f, 4.0f, 2.0f, 2.0f, 4.5f, true },
     }};
 }
 

@@ -1693,6 +1693,16 @@ bool DungeonClearHealRepositionAction::Execute(Event /*event*/)
         dy = close.GetPositionY();
         dz = close.GetPositionZ();
 
+        // The close-on point is not ring-sampled, so FindStandoffPoint's hazard
+        // screen never saw it. A healer that would have to step into a keep-out
+        // (a Rookery egg clutch) holds and heals what it can reach instead.
+        if (DcHazard::PointIsHot(bot, dx, dy, dz))
+        {
+            DC_PULL_TRACE("[DC:{}] heal reposition: close-on point is in a hazard keep-out "
+                          "-> holding", bot->GetName());
+            return false;
+        }
+
         // A leashed healer never takes the close past its leash: that walk is
         // exactly the one that carried it onto the Banquet Hall floor. Yield the
         // tick so the stock heal stack works whatever is in sight from the camp.

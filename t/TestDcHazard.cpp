@@ -9,6 +9,7 @@
 #include <vector>
 #include "Ai/Dungeon/DungeonClear/Data/DcHazardRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/DcNavPenaltyRegistry.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcHazard.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearTuning.h"
 
 // Pure tests for the hazard-emitter table and its geometry predicates. No map
@@ -851,4 +852,57 @@ TEST(DcHazardRegistry, DrakTharonTimedPoolsKeepTheStandardShape)
         // vertically of either.
         EXPECT_FLOAT_EQ(g->zBand, 6.0f);
     }
+}
+
+// --- Blackrock Spire: the UBRS Rookery eggs -----------------------------------
+
+TEST(DcHazardRookeryTest, EggIsATrapKeyedOnBothMapAndGameObjectEntry)
+{
+    EXPECT_TRUE(DcHazardRegistry::HasTrapHazards(229));
+    DcTrapHazard const* egg = DcHazardRegistry::FindTrap(229, 175124);
+    ASSERT_NE(egg, nullptr);
+    EXPECT_EQ(DcHazardRegistry::FindTrap(540, 175124), nullptr);  // right GO, wrong map
+    EXPECT_EQ(DcHazardRegistry::FindTrap(229, 181915), nullptr);  // the Blaze is not on 229
+
+    // The egg hatches on anyone within ~1.5yd plus body reach; the keep-out must
+    // clear that with margin, but stay small enough not to pave over the open floor
+    // between clutches (radius 4 covers ~48% of the Rookery's bounding box).
+    EXPECT_GT(egg->radius, 3.0f);
+    EXPECT_LE(egg->radius, 4.0f);
+    EXPECT_TRUE(egg->vacateRangedOnly);
+}
+
+TEST(DcHazardRookeryTest, EggRetreatOvershootsItsHoldBandAndClearsItsOwnKeepOut)
+{
+    for (uint32 entry : DcHazardRegistry::TrapEntries(229))
+    {
+        DcTrapHazard const* t = DcHazardRegistry::FindTrap(229, entry);
+        ASSERT_NE(t, nullptr);
+        EXPECT_GT(t->vacateRadius, 0.0f);
+        EXPECT_GT(t->retreatSlack, t->holdBand);
+        float const aim = t->vacateRadius + t->retreatSlack;
+        EXPECT_GT(aim, t->radius);
+        EXPECT_FALSE(DcHazardRegistry::PointInside(*t, 0.0f, 0.0f, 0.0f, aim, 0.0f, 0.0f));
+        // Within trigger reach of the egg reads hot.
+        EXPECT_TRUE(DcHazardRegistry::PointInside(*t, 0.0f, 0.0f, 0.0f, 1.5f, 0.0f, 0.0f));
+    }
+}
+
+TEST(DcHazardRookeryTest, EggZBandKeepsTheStadiumRimSeparateFromTheRookeryFloor)
+{
+    // Rookery eggs sit at z 91-97, the stadium-rim eggs at z 111: neither floor's
+    // eggs may fence the other.
+    DcTrapHazard const* egg = DcHazardRegistry::FindTrap(229, 175124);
+    ASSERT_NE(egg, nullptr);
+    EXPECT_FALSE(DcHazardRegistry::PointInside(*egg, 0.0f, 0.0f, 111.0f, 0.0f, 0.0f, 97.0f));
+}
+
+TEST(DcHazardRookeryTest, OnlyRangedAndHealersAreDrivenOffARangedOnlyTrap)
+{
+    // vacateRangedOnly: casters and healers step back, tanks and melee hold.
+    EXPECT_TRUE(DcHazard::TrapVacatesFor(/*rowRangedOnly*/ true, /*rangedOrHealer*/ true));
+    EXPECT_FALSE(DcHazard::TrapVacatesFor(true, false));
+    // Every other trap (the Blaze) still moves everyone.
+    EXPECT_TRUE(DcHazard::TrapVacatesFor(false, true));
+    EXPECT_TRUE(DcHazard::TrapVacatesFor(false, false));
 }

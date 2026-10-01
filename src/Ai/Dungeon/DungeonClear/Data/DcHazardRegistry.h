@@ -230,6 +230,13 @@ struct DcTrapHazard
     // step just past the rim and carry on fighting.
     float  holdBand{2.0f};
     float  retreatSlack{6.0f};
+
+    // When true, only RANGED bots and HEALERS retreat from this trap; tanks and
+    // melee DPS keep `radius` for placement but are never driven off it. For a
+    // trap carpeting a room the party fights in (the UBRS Rookery eggs), the
+    // melee have to stand where the enemy is and a vacate would pull them off
+    // their target every few steps, while a caster can always pick its spot.
+    bool   vacateRangedOnly{false};
 };
 
 class DcHazardRegistry

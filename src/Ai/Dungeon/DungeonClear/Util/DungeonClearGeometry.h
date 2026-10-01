@@ -9,7 +9,9 @@
 #include <cstddef>
 #include <vector>
 
+#include "Define.h"
 #include "G3D/Vector3.h"
+#include "MapDefines.h"
 
 class Player;
 class dtQueryFilterExt;
@@ -50,13 +52,22 @@ namespace DungeonClearGeometry
     // including them here would reject good corridors with a transient door.
     std::size_t LosCleanPrefixCount(Player* bot, std::vector<G3D::Vector3> const& pts);
 
-    // Apply the liquid-avoidance Detour area-cost multipliers (WaterPathCost,
-    // MagmaPathCost) to a freshly-built filter so the A* corridor search and the
-    // string-pulled smooth path both prefer land. The water/magma polys remain in
-    // the include flags, so a route still crosses liquid when no cheaper-enough
-    // land path exists (water caves, mandatory swims). Costs are server-only conf
-    // values, so this is safe to call from the off-map-thread route producers.
-    void ApplyLiquidAreaCosts(dtQueryFilterExt& filter);
+    // Every poly type a player can stand on — the include flags for every DC
+    // navmesh filter. NAV_GROUND_STEEP is the 50-60 degree band the mmap generator
+    // tags (modAlmostUnwalkableTriangles): still walkable, so a route or a snap
+    // must accept it, or a party on a ramp could neither route nor locate itself.
+    // ApplyTerrainAreaCosts makes it expensive instead.
+    inline constexpr uint16 WALKABLE_NAV_FLAGS =
+        NAV_GROUND | NAV_GROUND_STEEP | NAV_WATER | NAV_MAGMA;
+
+    // Apply the terrain-preference Detour area-cost multipliers (WaterPathCost,
+    // MagmaPathCost, SteepPathCost) to a freshly-built filter so the A* corridor
+    // search and the string-pulled smooth path prefer level, dry ground. The
+    // costed polys stay in the include flags, so a route still takes a steep ramp
+    // or crosses liquid when no cheaper-enough alternative exists (the only ramp
+    // up, water caves, mandatory swims). Costs are server-only conf values, so
+    // this is safe to call from the off-map-thread route producers.
+    void ApplyTerrainAreaCosts(dtQueryFilterExt& filter);
 }
 
 #endif

@@ -10,6 +10,7 @@
 #include "DetourExtended.h"
 #include "DetourNavMesh.h"
 #include "DetourNavMeshQuery.h"
+#include "DungeonClearGeometry.h"
 #include "Map.h"
 #include "MapCollisionData.h"
 #include "MapDefines.h"
@@ -35,7 +36,7 @@ NavmeshSnap::Result NavmeshSnap::Snap(Map const* map, float x, float y, float z,
     // Simple ground/water filter — matches the player branch of
     // PathGenerator::CreateFilter so we snap to polys a player can stand on.
     dtQueryFilterExt filter;
-    filter.setIncludeFlags(NAV_GROUND | NAV_WATER | NAV_MAGMA);
+    filter.setIncludeFlags(DungeonClearGeometry::WALKABLE_NAV_FLAGS);
     filter.setExcludeFlags(0);
 
     // World (x, y, z) maps to detour (y, z, x).

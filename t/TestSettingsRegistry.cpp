@@ -242,3 +242,16 @@ TEST(DcSettingsRegistryTest, TrashBandClampedToHeroicCap)
     ASSERT_TRUE(DcHasHeroicDefault(*d));
     EXPECT_EQ(d->heroicVal, 42);
 }
+
+TEST(DcSettingsRegistryTest, SteepGroundIsCostedNotForbidden)
+{
+    // The regenerated navmesh tags 50-60 degree slopes NAV_GROUND_STEEP. Every DC
+    // filter must still ACCEPT it (a ramp can be the only way up, and a party on
+    // one must snap) and the route producers make it expensive instead.
+    DcSettingDef const* steep = FindDcSetting("SteepPathCost");
+    ASSERT_NE(steep, nullptr);
+    EXPECT_EQ(steep->type, DcType::Float);
+    EXPECT_GT(steep->defVal, 1.0);           // preferred against, by default
+    EXPECT_GE(steep->minVal, 1.0);           // never cheaper than level ground
+    EXPECT_FALSE(steep->playerFacing);       // server-only: read off the map thread
+}

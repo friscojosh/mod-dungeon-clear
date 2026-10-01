@@ -335,7 +335,7 @@ void RegisterAzjolNerubRoster(std::vector<BossRosterPatch>& t)
 // southern shore. A plain shortest-path string-pull will happily cut a corner
 // through it: the first cut of this route did exactly that and the party swam
 // ~80yd across the drop chamber (tp-20260818-200553-1). The stock pathfinder
-// never makes that mistake because DungeonClearGeometry::ApplyLiquidAreaCosts
+// never makes that mistake because DungeonClearGeometry::ApplyTerrainAreaCosts
 // charges NAV_WATER edges DungeonClear.WaterPathCost (default 3x), but the
 // anchor fast-path bypasses the filter entirely — a route authored here has to
 // price the water itself. t/TestAzjolNerubRouteProbe is the guard.

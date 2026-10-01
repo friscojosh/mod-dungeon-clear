@@ -297,11 +297,11 @@ void CorridorCenter::Center(Player* bot, std::vector<G3D::Vector3>& pts, Params 
         return;
 
     dtQueryFilterExt filter;
-    filter.setIncludeFlags(static_cast<uint16>(NAV_GROUND | NAV_WATER | NAV_MAGMA));
+    filter.setIncludeFlags(DungeonClearGeometry::WALKABLE_NAV_FLAGS);
     filter.setExcludeFlags(0);
     // Match the route producers' liquid preference so the centering wall-probe /
     // smoothing pass weighs polys the same way the corridor was routed.
-    DungeonClearGeometry::ApplyLiquidAreaCosts(filter);
+    DungeonClearGeometry::ApplyTerrainAreaCosts(filter);
 
     Center(query.get(), &filter, bot, pts, params);
 }

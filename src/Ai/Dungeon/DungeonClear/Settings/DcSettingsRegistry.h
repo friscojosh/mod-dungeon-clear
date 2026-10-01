@@ -771,9 +771,14 @@ inline constexpr DcSettingDef kDcSettings[] =
     // resort (the player nav-filter already excludes slime outright). These feed
     // dtQueryFilter::setAreaCost in LongRangePathfinder + CorridorCenter; both run
     // off the map thread, so they are server-only (read straight from conf, never
-    // the per-run override store). See DungeonClearGeometry::ApplyLiquidAreaCosts.
+    // the per-run override store). See DungeonClearGeometry::ApplyTerrainAreaCosts.
     { "WaterPathCost",         DcType::Float,  3,   1,  50,  false },
     { "MagmaPathCost",         DcType::Float, 20,   1, 1000, false },
+    // Steep ground (NAV_GROUND_STEEP, the 50-60 degree band the mmap generator
+    // tags): walkable, but where bots used to run up walls. A ramp is taken when
+    // the level way round is more than SteepPathCost times longer, or when it is
+    // the only way. Same server-only, off-map-thread rule as the two above.
+    { "SteepPathCost",         DcType::Float,  4,   1,  50,  false },
 
     // Submerged swim legs (Tier A). When the navmesh route to a target dead-ends
     // AND water lies between, the bot greedily 3D-swims to it instead of stalling

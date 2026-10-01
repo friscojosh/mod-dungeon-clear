@@ -504,6 +504,7 @@ namespace
             RegisterTrialOfTheChampionEvents(t);
             RegisterOculusEvents(t);
             RegisterKarazhanEvents(t);
+            RegisterRuinsOfAhnQirajEvents(t);
             return t;
         }();
         return kEvents;

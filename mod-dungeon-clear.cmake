@@ -102,6 +102,7 @@ if (BUILD_TESTING)
             "${MOD_PATH}/t/TestFactionEntrySwap.cpp"
             "${MOD_PATH}/t/TestDcHazard.cpp"
             "${MOD_PATH}/t/TestMarkPlan.cpp"
+            "${MOD_PATH}/t/TestSteepAvoidanceProbe.cpp"
             "${MOD_PATH}/t/TestDcZoneLine.cpp"
             "${MOD_PATH}/t/TestBossRoster.cpp"
             "${MOD_PATH}/t/TestBossOrdering.cpp"

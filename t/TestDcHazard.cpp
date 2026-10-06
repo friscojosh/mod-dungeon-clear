@@ -3,6 +3,8 @@
  * and/or modify it under version 3 of the License, or (at your option), any later version.
  */
 
+#include <algorithm>
+
 #include "gtest/gtest.h"
 
 #include <cmath>
@@ -175,9 +177,11 @@ TEST(DcHazardShatteredHallsTest, TrapEntriesIsMapScoped)
 TEST(DcHazardMoltenCoreTest, TheMajordomoCoalPitIsATrapEveryoneLeaves)
 {
     // The pit Majordomo teleports people into, and the raid then rests on.
+    // ...and the Lava Bomb patches Magmadar leaves under his targets.
     std::vector<uint32> const onMap = DcHazardRegistry::TrapEntries(409);
-    ASSERT_EQ(onMap.size(), 1u);
-    EXPECT_EQ(onMap.front(), 178164u);
+    ASSERT_EQ(onMap.size(), 2u);
+    EXPECT_NE(std::find(onMap.begin(), onMap.end(), 178164u), onMap.end());
+    EXPECT_NE(std::find(onMap.begin(), onMap.end(), 177704u), onMap.end());
 }
 
 TEST(DcHazardRegistry, FindIsKeyedOnBothMapAndEntry)

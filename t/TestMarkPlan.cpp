@@ -8,6 +8,7 @@
 
 using DcMarkPlan::CcCandidate;
 using DcMarkPlan::CcSlots;
+using DcMarkPlan::CcToRelease;
 using DcMarkPlan::PlanCc;
 
 namespace
@@ -29,6 +30,16 @@ TEST(DcMarkPlanTest, PullSizeDecidesHowManyMobsLeaveTheFight)
     EXPECT_EQ(CcSlots(6), 2u);
     EXPECT_EQ(CcSlots(8), 3u);
     EXPECT_EQ(CcSlots(10), 4u);  // a UBRS 10-elite pack: four held, six fought
+}
+
+TEST(DcMarkPlanTest, AShrunkenPullLetsItsHeldMobsGo)
+{
+    EXPECT_EQ(CcToRelease(1, 5), 0u);   // still a pull worth holding one out of
+    EXPECT_EQ(CcToRelease(1, 4), 0u);
+    EXPECT_EQ(CcToRelease(1, 3), 1u);   // small enough to burn down: let it go
+    EXPECT_EQ(CcToRelease(1, 1), 1u);   // the held mob is all that is left
+    EXPECT_EQ(CcToRelease(2, 5), 1u);   // two held, only one still earned
+    EXPECT_EQ(CcToRelease(0, 1), 0u);
 }
 
 TEST(DcMarkPlanTest, NarrowestCasterChoosesFirst)

@@ -9,6 +9,7 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcMarkPlan.h"
 #include "Creature.h"
 #include "Group.h"
+#include "Log.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
 #include "Playerbots.h"
@@ -194,6 +195,59 @@ bool DcMarkTargetsStep(PlayerbotAI* botAI, bool apply)
             if (!apply)
                 return true;
             group->SetTargetIcon(skullIdx, bot->GetGUID(), pick->GetGUID());
+            changed = true;
+        }
+    }
+
+    // Release: a pull that has shrunk no longer earns the holds it was given
+    // (DcMarkPlan::CcToRelease), so the icon comes off and the party burns the mob down.
+    // Only a mob that is actually being held, or the last one standing, is let go: an
+    // encounter's own use of these icons on a fighting add is not ours to undo. Never a
+    // boss. Lowest health first.
+    {
+        struct Held
+        {
+            int32 idx;
+            char const* icon;
+            Unit* unit;
+        };
+        std::vector<Held> held;
+        for (CcKind const& k : kCcKinds)
+        {
+            int32 const idx = RtiTargetValue::GetRtiIndex(k.icon);
+            if (idx < 0 || idx == skullIdx)
+                continue;
+            ObjectGuid const g = group->GetTargetIcon(idx);
+            if (g.IsEmpty())
+                continue;
+            for (Unit* u : attackers)
+            {
+                if (u->GetGUID() != g)
+                    continue;
+                Creature* c = u->ToCreature();
+                bool const boss = c && (c->isWorldBoss() || c->IsDungeonBoss() ||
+                                        c->GetCreatureTemplate()->rank == CREATURE_ELITE_WORLDBOSS);
+                if (!boss)
+                    held.push_back({ idx, k.icon, u });
+                break;
+            }
+        }
+        uint32 toRelease = DcMarkPlan::CcToRelease(static_cast<uint32>(held.size()),
+                                                   static_cast<uint32>(attackers.size()));
+        std::sort(held.begin(), held.end(),
+                  [](Held const& a, Held const& b) { return a.unit->GetHealth() < b.unit->GetHealth(); });
+        for (Held const& h : held)
+        {
+            if (!toRelease)
+                break;
+            if (attackers.size() > 1 && !h.unit->HasAuraWithMechanic(kCcMechanics))
+                continue;
+            if (!apply)
+                return true;
+            group->SetTargetIcon(h.idx, bot->GetGUID(), ObjectGuid::Empty);
+            LOG_INFO("playerbots.dungeonclear", "[DC:{}] released the {} hold on {}: {} attacker(s) left",
+                     bot->GetName(), h.icon, h.unit->GetName(), attackers.size());
+            --toRelease;
             changed = true;
         }
     }

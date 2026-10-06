@@ -39,6 +39,17 @@ namespace DcMarkPlan
         return attackers < CC_MIN_ATTACKERS ? 0u : 1u + (attackers - CC_MIN_ATTACKERS) / 2u;
     }
 
+    // How many held mobs to let go. A pull that has shrunk no longer earns the holds it
+    // was given: `held` of its `attackers` (the held ones included) carry a CC icon, and
+    // only CcSlots(attackers) of them are still worth a caster's GCD. Without this the
+    // icon outlives the fight it was placed for, the caster keeps re-applying its spell,
+    // and the last mob of a pack (a banished elemental cannot even be damaged) never dies.
+    inline std::uint32_t CcToRelease(std::uint32_t held, std::uint32_t attackers)
+    {
+        std::uint32_t const slots = CcSlots(attackers);
+        return held > slots ? held - slots : 0u;
+    }
+
     struct CcCandidate
     {
         bool  boss = false;          // never CC a boss

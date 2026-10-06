@@ -708,12 +708,31 @@ namespace
     // vacate 2 (the trigger reach) + hold 2 = in danger inside 4yd, matching the
     // placement radius; slack 4.5 aims the step-back at 6.5yd, outside `radius`.
     // Ranged-only vacate: the melee fight the hatchlings where they stand.
-    constexpr std::array<DcTrapHazard, 2> kTrapHazards = {{
+    // Molten Core (map 409), gameobject 178164 "Hot Coal" — ONE spawn (guid 247) at
+    // (736.7,-1176.3,-118.1): the coal pit in the middle of Majordomo Executus'
+    // chamber, 23yd from MajordomoSummonPos. gameobject_template: type 6 (TRAP),
+    // Data2 diameter 10 (a 5yd trigger), Data3 spell 20533, permanent. It is where
+    // his two Teleports (20618 random target, 20534 his victim) drop people, and it
+    // sits between the door and the eight adds, so the raid fights and then rests,
+    // loots and resurrects on top of it. Nothing drove anyone off: the playerbots
+    // `moltencore` strategy only flees LIQUID lava (McInLavaTrigger), and this is a
+    // gameobject. Live 2026-10-06 the raid stood in it through the fight and after.
+    //
+    // (Not to be confused with 177000, also "Hot Coal", 0.3yd away: that one is the
+    // decorative DOOR-typed prop DcEventDoorRegistry hides from navigation.)
+    //
+    // vacate 6 = the trigger reach plus a body; hold 2 = in danger inside 8yd; slack
+    // 6 aims the step-out at 12yd, outside the 9yd placement radius. Everyone
+    // leaves, melee included: the adds are tanked wherever the tank stands, and a
+    // teleported victim has to walk out whatever its role.
+    constexpr std::array<DcTrapHazard, 3> kTrapHazards = {{
         //                   radius  zBand  vacate  hold  slack  rangedOnly
         // Blaze — the 60s fire patch a flame arrow leaves on the gauntlet floor.
         { 540, 181915, 5.0f, 6.0f, 3.5f, 2.0f, 6.0f, false },
         // Rookery Egg — hatches a whelp on anyone within reach.
         { 229, 175124, 4.0f, 4.0f, 2.0f, 2.0f, 4.5f, true },
+        // Hot Coal — the fire pit in Majordomo Executus' chamber.
+        { 409, 178164, 9.0f, 6.0f, 6.0f, 2.0f, 6.0f, false },
     }};
 }
 

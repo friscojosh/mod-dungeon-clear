@@ -172,6 +172,14 @@ TEST(DcHazardShatteredHallsTest, TrapEntriesIsMapScoped)
     EXPECT_TRUE(DcHazardRegistry::TrapEntries(0).empty());
 }
 
+TEST(DcHazardMoltenCoreTest, TheMajordomoCoalPitIsATrapEveryoneLeaves)
+{
+    // The pit Majordomo teleports people into, and the raid then rests on.
+    std::vector<uint32> const onMap = DcHazardRegistry::TrapEntries(409);
+    ASSERT_EQ(onMap.size(), 1u);
+    EXPECT_EQ(onMap.front(), 178164u);
+}
+
 TEST(DcHazardRegistry, FindIsKeyedOnBothMapAndEntry)
 {
     DcHazardEmitter const* sentinel = DcHazardRegistry::Find(552, 20869);

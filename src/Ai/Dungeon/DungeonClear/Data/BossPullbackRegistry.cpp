@@ -54,8 +54,30 @@ namespace
     // half first — this row spent a long time treating a symptom.
     std::vector<BossPullback> const& Rows()
     {
+        // Majordomo Executus (12018, Molten Core 409). The ground that kills here is
+        // not his own spot but the room's middle: gameobject 178164 "Hot Coal", a
+        // permanent fire trap (5yd trigger) at (736.7,-1176.3,-118.1), 23yd from his
+        // summon point (759.5,-1173.4) and inside the ring his eight adds stand in.
+        // Walked in, the tank took the pull 14yd from the pit and the raid fought,
+        // rested and resurrected on top of it (live 2026-10-06; the DcTrapHazard row
+        // now drives bots OFF it, but that only empties the pit, it does not move the
+        // fight). There is no upstream defect to fix instead: the pit is the
+        // encounter's own mechanic, where his two Teleports drop people.
+        //
+        // Anchor (714.7,-1205.3,-119.6): probed navmesh (poly centroid, flat, slope
+        // 4 deg) on the chamber floor by the south-west mouth the raid enters
+        // through — 38yd from the pit, 57yd from his summon point, in a floor about
+        // 60yd wide. The straight leg from the anchor to him passes 13yd south of
+        // the pit's centre, outside the trap row's 9yd keep-out, so the tag does not
+        // cross the coals either. He chases like any boss (no leash in
+        // boss_majordomo_executus.cpp) and the adds come with him, so Separation
+        // Anxiety (adds too far from HIM) is not provoked by the drag.
+        //
+        // Ordinary tag: his adds notice the tank at ~35yd, which is how the fight
+        // started on the live run. No force-aggro, no summon.
         static std::vector<BossPullback> const rows = {
             // map  entry  anchor x  y  z  forceAggro  summonIfStuck
+            { 409, 12018, 714.7f, -1205.3f, -119.6f },
         };
         return rows;
     }

@@ -38,12 +38,33 @@ namespace
     constexpr float kPlatformY = -458.73f;
 }
 
-TEST(DungeonClearBossPullbackTest, TableIsEmpty)
+TEST(DungeonClearBossPullbackTest, MajordomoIsTheOnlyRow)
 {
-    // Not a placeholder: an empty table is the current design. If a row is ever
-    // added, this test is the prompt to say WHY in the same commit.
+    // The table was empty by design until a boss turned up whose room, not an
+    // upstream defect, is what kills the party: Majordomo Executus is fought round
+    // a permanent fire trap. The WHY is in BossPullbackRegistry.cpp.
     EXPECT_EQ(BossPullbackRegistry::Find(kUnderbog, kGhazan), nullptr);
     EXPECT_FALSE(BossPullbackRegistry::HasRows(kUnderbog));
+
+    BossPullback const* row = BossPullbackRegistry::Find(409, 12018);
+    ASSERT_NE(row, nullptr);
+    EXPECT_TRUE(BossPullbackRegistry::HasRows(409));
+    EXPECT_EQ(BossPullbackRegistry::Find(409, 11988), nullptr);  // Golemagg is fought where he stands
+
+    // An ordinary tag: no forced aggro, no relocation.
+    EXPECT_FLOAT_EQ(row->forceAggroRange, 0.0f);
+    EXPECT_FALSE(row->summonWhenStuckBelow);
+
+    // The anchor has to stand well clear of the Hot Coal trap (736.7,-1176.3) and
+    // the straight tag leg to his summon point (759.5,-1173.4) has to miss it too.
+    float const pitX = 736.7f, pitY = -1176.3f, majX = 759.5f, majY = -1173.4f;
+    float const dx = row->campX - pitX, dy = row->campY - pitY;
+    EXPECT_GT(dx * dx + dy * dy, 30.0f * 30.0f);
+
+    float const lx = majX - row->campX, ly = majY - row->campY;
+    float const t = ((pitX - row->campX) * lx + (pitY - row->campY) * ly) / (lx * lx + ly * ly);
+    float const cx = row->campX + t * lx - pitX, cy = row->campY + t * ly - pitY;
+    EXPECT_GT(cx * cx + cy * cy, 9.0f * 9.0f);   // the trap row's keep-out radius
 }
 
 TEST(DungeonClearBossPullbackTest, GhazanIsNoLongerPulledBack)

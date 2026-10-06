@@ -64,7 +64,12 @@ namespace
 
     // boss_majordomo_executus.cpp authored positions.
     // Majordomo's battle spawn (the add fight):
-    constexpr float kMajX = 759.542f, kMajY = -1173.43f, kMajZ = -118.974f;
+    [[maybe_unused]] constexpr float kMajX = 759.542f, kMajY = -1173.43f, kMajZ = -118.974f;
+    // Where the raid FIGHTS him: the BossPullbackRegistry anchor by the chamber
+    // mouth, 38yd clear of the Hot Coal trap in the middle of the room. The roster
+    // anchor must be this same point (boss navigation walks the party here and the
+    // tank goes out alone to tag him), so keep the two in step.
+    constexpr float kMajCampX = 714.7f, kMajCampY = -1205.3f, kMajCampZ = -119.6f;
     // His post-victory teleport spot by Ragnaros' lair (the gossip target):
     constexpr float kRagGossipX = 848.933f, kRagGossipY = -812.875f, kRagGossipZ = -229.601f;
     // Ragnaros' summon position (the fight anchor):
@@ -132,7 +137,7 @@ void RegisterMoltenCoreRoster(std::vector<BossRosterPatch>& t)
     // The eight statics keep their derived DBC order (bits 0-7 match the
     // classic clear path). The finale slots in after them.
     p.add.push_back(MakeBoss(kMajordomo, kMapId, "Majordomo Executus",
-                             kMajX, kMajY, kMajZ, /*completionFrom*/ 0,
+                             kMajCampX, kMajCampY, kMajCampZ, /*completionFrom*/ 0,
                              /*orderOverride*/ 8, kSlotMajordomo));
     p.add.push_back(MakeObjective(OBJ(1), /*encounterIndex*/ 9, kMapId,
                                   "Summon Ragnaros",

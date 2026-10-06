@@ -123,7 +123,19 @@ TEST(DcGroupPlanTest, AFullHouseOfShamansCoversEveryGroupOnce)
         EXPECT_EQ(ShamansIn(after, g), 1) << "group " << int(g);
 }
 
-TEST(DcGroupPlanTest, ARealPlayerShamanIsNeverMoved)
+TEST(DcGroupPlanTest, AMovablePlayerMakesRoomBeforeAHealerDoes)
+{
+    // The live arranger marks real players movable. In the main tank's group of three tanks,
+    // a healer and a melee player, the melee player is the one who goes: the healer stays.
+    std::vector<Member> members = LiveRaid();
+    members[4].movable = true;
+    std::vector<Member> const after = Apply(members);
+    EXPECT_EQ(ShamansIn(after, 0), 1);
+    EXPECT_EQ(after[3].group, 0) << "the healer stays with the tanks";
+    EXPECT_NE(after[4].group, 0) << "the player made room";
+}
+
+TEST(DcGroupPlanTest, AnImmovableShamanIsNeverMoved)
 {
     Member human = Shaman(1);
     human.movable = false;

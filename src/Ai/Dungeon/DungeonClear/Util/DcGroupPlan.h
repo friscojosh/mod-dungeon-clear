@@ -27,7 +27,8 @@
 // and then how many melee they hold (those are the ones standing in a fear's reach).
 //
 // The plan only ever SWAPS a shaman with one member of the group it is going to, so every
-// group keeps its size, and it never moves a tank or anyone who is not a bot.
+// group keeps its size, and it never moves a tank. `movable` is the caller's to set: the live
+// arranger marks everyone movable, real players included.
 namespace DcGroupPlan
 {
     struct Member
@@ -38,7 +39,7 @@ namespace DcGroupPlan
         bool mainTank = false;
         bool melee = false;         // fights in melee and is not a tank
         bool healer = false;
-        bool movable = false;       // a bot; a real player is never moved
+        bool movable = false;       // may be swapped to another group
     };
 
     // A swap of two members, by index into the input.

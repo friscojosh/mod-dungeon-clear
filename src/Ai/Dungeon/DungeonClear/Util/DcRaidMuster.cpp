@@ -11,6 +11,7 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcGroupPlan.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRaidMusterDecision.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcStatusPublisher.h"
+#include "Chat.h"
 #include "Group.h"
 #include "Log.h"
 #include "Map.h"
@@ -54,7 +55,9 @@ void ApplyMusterRestOverride(Player* bot, DcRunState& run)
 // Put the raid's shamans where their Tremor Totem counts (DcGroupPlan.h has the why):
 // one per sub-group, the main tank's group first. Run as each muster arms, so a raid that
 // was assembled class by class is sorted before the first boss and anyone who joined or
-// was moved since is picked up before the next. Swaps only, bots only, never a tank.
+// was moved since is picked up before the next. Swaps only, never a tank. A real player may be
+// the one who makes room (Josh, 2026-10-06: the AI may move the player between groups) and is
+// told so in their own chat, with the reason.
 void ArrangeSubGroups(Player* bot)
 {
     Group* group = bot->GetGroup();
@@ -76,7 +79,7 @@ void ArrangeSubGroups(Player* bot)
         m.mainTank = PlayerbotAI::IsMainTank(member);
         m.healer = PlayerbotAI::IsHeal(member);
         m.melee = !m.tank && !m.healer && !PlayerbotAI::IsRanged(member);
-        m.movable = GET_PLAYERBOT_AI(member) != nullptr;
+        m.movable = true;
         players.push_back(member);
         members.push_back(m);
     }
@@ -89,6 +92,15 @@ void ArrangeSubGroups(Player* bot)
         uint8 const from = shaman->GetSubGroup();
         group->ChangeMembersGroup(shaman->GetGUID(), to);
         group->ChangeMembersGroup(out->GetGUID(), from);
+        for (Player* moved : { shaman, out })
+        {
+            if (GET_PLAYERBOT_AI(moved) || !moved->GetSession())
+                continue;
+            ChatHandler(moved->GetSession())
+                .PSendSysMessage("Raid groups: you were moved to group {} so that {} (shaman) can put a Tremor "
+                                 "Totem in group {}. It only frees its own party from fear.",
+                                 (moved == shaman ? to : from) + 1, shaman->GetName(), to + 1);
+        }
         LOG_INFO("playerbots.dungeonclear",
                  "[DC:{}] raid groups: {} (shaman) to group {}, {} to group {} — one Tremor Totem per "
                  "group, tanks' groups first",

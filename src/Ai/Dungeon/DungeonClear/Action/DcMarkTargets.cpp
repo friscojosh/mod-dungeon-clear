@@ -165,9 +165,18 @@ bool DcMarkTargetsStep(PlayerbotAI* botAI, bool apply)
     Player* const leader = context->GetValue<Player*>(DcKey::PartyTank)->Get();
     if (!leader)
         return false;   // no active run
+    // A raid strategy that deals its own crowd-control marks for this fight (mod-playerbots sets
+    // "raid owns cc marks": Garr's Firesworn and Ragnaros' Sons, one Banish per warlock, each on
+    // its own icon) owns them outright. This step then neither re-points anyone's `rti cc`, nor
+    // places a hold, nor releases one -- it would be undoing the other's work every tick. The
+    // skull below is still ours. The value is absent on a mod-playerbots without it, hence the
+    // null check.
+    Value<bool>* const ownedValue = context->GetValue<bool>("raid owns cc marks");
+    bool const raidOwnsCc = ownedValue && ownedValue->Get();
+
     // Every bot of a CC class sets itself up; only the run's leader marks.
     if (leader != bot)
-        return EnsureOwnCcSetup(botAI, bot, group, apply);
+        return raidOwnsCc ? false : EnsureOwnCcSetup(botAI, bot, group, apply);
 
     std::vector<Unit*> attackers;
     for (ObjectGuid const guid : context->GetValue<GuidVector>("attackers")->Get())
@@ -204,6 +213,7 @@ bool DcMarkTargetsStep(PlayerbotAI* botAI, bool apply)
     // Only a mob that is actually being held, or the last one standing, is let go: an
     // encounter's own use of these icons on a fighting add is not ours to undo. Never a
     // boss. Lowest health first.
+    if (!raidOwnsCc)
     {
         struct Held
         {
@@ -254,7 +264,7 @@ bool DcMarkTargetsStep(PlayerbotAI* botAI, bool apply)
 
     // Crowd control: each available caster's own icon on a mob it can hold, as many as
     // the pull is worth (DcMarkPlan::CcSlots), narrowest caster first.
-    uint32 const slots = DcMarkPlan::CcSlots(static_cast<uint32>(attackers.size()));
+    uint32 const slots = raidOwnsCc ? 0u : DcMarkPlan::CcSlots(static_cast<uint32>(attackers.size()));
     std::vector<Caster> const casters = slots ? CcCasters(bot, group) : std::vector<Caster>{};
     if (!casters.empty())
     {

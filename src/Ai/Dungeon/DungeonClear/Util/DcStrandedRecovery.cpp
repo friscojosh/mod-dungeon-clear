@@ -3,6 +3,7 @@
  * and/or modify it under version 3 of the License, or (at your option), any later version.
  */
 
+#include "DcPartyState.h"
 #include "DcStrandedRecovery.h"
 
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
@@ -274,6 +275,8 @@ namespace DcStrandedRecovery
             // joust, which is a strand this recovery would be CAUSING.
             if (member->GetVehicle())
                 continue;
+            if (DcPartyState::HoldsRaidPosition(member))
+                continue;                       // on an assigned spot — not stranded
             float const strandedDist = leader->GetDistance(member);
             if (strandedDist <= maxSpread)
                 continue;                       // in range — not stranded

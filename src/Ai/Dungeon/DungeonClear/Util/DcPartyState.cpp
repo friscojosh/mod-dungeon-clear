@@ -94,6 +94,15 @@ float DcPartyState::RestMinMpPct(Player* bot)
     // higher gate would strand the tank waiting on slow natural mana regen.
     return std::min(75.0f, static_cast<float>(sPlayerbotAIConfig.highMana));
 }
+bool DcPartyState::HoldsRaidPosition(Player* member)
+{
+    PlayerbotAI* ai = member ? GET_PLAYERBOT_AI(member) : nullptr;
+    if (!ai || !ai->GetAiObjectContext())
+        return false;
+    Value<bool>* holds = ai->GetAiObjectContext()->GetValue<bool>("raid holds position");
+    return holds && holds->Get();
+}
+
 bool DcPartyState::IsPartyReady(Player* bot, float minHpPct, float minMpPct, float maxSpread,
                                 Position const* spreadAnchor, float maxTankGap)
 {
@@ -107,7 +116,7 @@ bool DcPartyState::IsPartyReady(Player* bot, float minHpPct, float minMpPct, flo
     // walk and the raid quorum walk below judge a member identically.
     auto const memberMeetsBars = [&](Player* member)
     {
-        if (member != bot)
+        if (member != bot && !HoldsRaidPosition(member))
         {
             float const spread = spreadAnchor ? member->GetDistance(*spreadAnchor)
                                               : bot->GetDistance(member);
@@ -559,7 +568,7 @@ std::string DcPartyState::DescribePartyNotReady(Player* bot,
         // matters only for which single reason we surface first; distance reads
         // most intuitively, then health, then mana.
         std::string reason;
-        if (member != bot &&
+        if (member != bot && !HoldsRaidPosition(member) &&
             ((spreadAnchor ? member->GetDistance(*spreadAnchor)
                            : bot->GetDistance(member)) > maxSpread ||
              (maxTankGap > 0.0f && bot->GetDistance(member) > maxTankGap)))

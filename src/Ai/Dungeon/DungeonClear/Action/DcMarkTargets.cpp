@@ -3,6 +3,7 @@
  * and/or modify it under version 3 of the License, or (at your option), any later version.
  */
 
+#include <algorithm>
 #include "DcMarkTargets.h"
 
 #include "Ai/Dungeon/DungeonClear/DcValueKeys.h"
@@ -185,7 +186,32 @@ bool DcMarkTargetsStep(PlayerbotAI* botAI, bool apply)
         if (u && u->IsAlive() && !u->IsPlayer() && u->GetMapId() == bot->GetMapId())
             attackers.push_back(u);
     }
-    if (attackers.empty())
+
+    // The mobs being held, read off the icons and NOT off `attackers`: that list leaves
+    // out anything immune to all damage, which is exactly what a banished elemental is.
+    // Reading the held ones out of it found none, so a Banish was never let go -- and once
+    // the rest of the pack was dead the list was empty and this step did not run at all
+    // (Molten Core, 2026-10-06: the square stayed on the last elemental).
+    std::vector<Unit*> heldOutside;
+    for (CcKind const& k : kCcKinds)
+    {
+        int32 const idx = RtiTargetValue::GetRtiIndex(k.icon);
+        if (idx < 0)
+            continue;
+        Unit* u = botAI->GetUnit(group->GetTargetIcon(idx));
+        if (!u || !u->IsAlive() || u->IsPlayer() || u->GetMapId() != bot->GetMapId())
+            continue;
+        if (!u->IsInCombat() && !u->HasAuraWithMechanic(kCcMechanics))
+            continue;   // an icon left on something nobody is fighting
+        if (bot->GetExactDist(u) > 120.0f)
+            continue;
+        if (std::find(attackers.begin(), attackers.end(), u) == attackers.end() &&
+            std::find(heldOutside.begin(), heldOutside.end(), u) == heldOutside.end())
+            heldOutside.push_back(u);
+    }
+    // Everything still alive in this fight: what can be hit, and what is held out of it.
+    std::size_t const fightSize = attackers.size() + heldOutside.size();
+    if (!fightSize)
         return false;
 
     int32 const skullIdx = RtiTargetValue::GetRtiIndex(context->GetValue<std::string>("rti")->Get());
@@ -230,7 +256,9 @@ bool DcMarkTargetsStep(PlayerbotAI* botAI, bool apply)
             ObjectGuid const g = group->GetTargetIcon(idx);
             if (g.IsEmpty())
                 continue;
-            for (Unit* u : attackers)
+            std::vector<Unit*> inFight = attackers;
+            inFight.insert(inFight.end(), heldOutside.begin(), heldOutside.end());
+            for (Unit* u : inFight)
             {
                 if (u->GetGUID() != g)
                     continue;
@@ -243,20 +271,24 @@ bool DcMarkTargetsStep(PlayerbotAI* botAI, bool apply)
             }
         }
         uint32 toRelease = DcMarkPlan::CcToRelease(static_cast<uint32>(held.size()),
-                                                   static_cast<uint32>(attackers.size()));
+                                                   static_cast<uint32>(fightSize));
         std::sort(held.begin(), held.end(),
                   [](Held const& a, Held const& b) { return a.unit->GetHealth() < b.unit->GetHealth(); });
         for (Held const& h : held)
         {
             if (!toRelease)
                 break;
-            if (attackers.size() > 1 && !h.unit->HasAuraWithMechanic(kCcMechanics))
+            if (fightSize > 1 && !h.unit->HasAuraWithMechanic(kCcMechanics))
                 continue;
             if (!apply)
                 return true;
             group->SetTargetIcon(h.idx, bot->GetGUID(), ObjectGuid::Empty);
-            LOG_INFO("playerbots.dungeonclear", "[DC:{}] released the {} hold on {}: {} attacker(s) left",
-                     bot->GetName(), h.icon, h.unit->GetName(), attackers.size());
+            // A Banish would otherwise run out its half minute with the raid standing round
+            // a mob nobody can hit. A warlock ends its own Banish by casting it again; this
+            // is that, without the cast.
+            h.unit->RemoveAurasWithMechanic(1u << MECHANIC_BANISH);
+            LOG_INFO("playerbots.dungeonclear", "[DC:{}] released the {} hold on {}: {} left in the fight",
+                     bot->GetName(), h.icon, h.unit->GetName(), fightSize);
             --toRelease;
             changed = true;
         }

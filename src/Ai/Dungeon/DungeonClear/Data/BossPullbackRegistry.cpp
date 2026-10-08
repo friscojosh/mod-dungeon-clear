@@ -76,7 +76,7 @@ namespace
         // Ordinary tag: his adds notice the tank at ~35yd, which is how the fight
         // started on the live run. No force-aggro, no summon.
         static std::vector<BossPullback> const rows = {
-            // map  entry  anchor x  y  z  forceAggro  summonIfStuck
+            // map  entry  anchor x  y  z  forceAggro  summonIfStuck  tag x  y  radius
             { 409, 12018, 714.7f, -1205.3f, -119.6f },
         };
         return rows;
@@ -97,4 +97,15 @@ bool BossPullbackRegistry::HasRows(uint32 mapId)
         if (r.mapId == mapId)
             return true;
     return false;
+}
+
+bool BossPullbackRegistry::InTagWindow(BossPullback const& row, float x, float y)
+{
+    // No window is not "an empty window": a row that never asked for one must keep
+    // arming exactly as it did before the field existed.
+    if (!row.HasTagWindow())
+        return true;
+    float const dx = x - row.tagX;
+    float const dy = y - row.tagY;
+    return (dx * dx + dy * dy) <= (row.tagRadius * row.tagRadius);
 }

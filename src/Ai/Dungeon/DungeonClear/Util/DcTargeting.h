@@ -267,6 +267,10 @@ public:
     // to the walk-in engage). Cheap: a registry Find plus the already-memoised
     // at-boss probe — and the Find misses outright while the table is empty, which
     // it has been since S1593.
+    //
+    // One further condition, off by default so a plain row is unchanged: for a
+    // row with a tag window (BossPullback::tagX, a patrolling boss) his live
+    // position must be inside it. Not consulted once the pull has committed.
     static bool IsPullbackBossDue(Player* bot, AiObjectContext* ctx);
 
     // --- Room-wide-aggro pre-clear (RoomAggroRegistry) --------------------

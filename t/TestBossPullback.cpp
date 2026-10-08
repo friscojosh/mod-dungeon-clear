@@ -13,16 +13,18 @@
 // Pull-back bosses (BossPullbackRegistry) — the "this boss must be fought
 // somewhere else" table.
 //
-// THE TABLE IS EMPTY. Its one row (Ghaz'an) was retired in S1593 once the cause
-// was fixed upstream: he sat in the lake only because a headless party never
-// fired areatrigger 4302, the sole caller of his ACTION_MOVE_TO_PLATFORM. He
-// climbs onto meshed ground now and is fought like any other boss.
+// The table's FIRST row (Ghaz'an) was retired in S1593 once the cause was fixed
+// upstream: he sat in the lake only because a headless party never fired
+// areatrigger 4302, the sole caller of his ACTION_MOVE_TO_PLATFORM. He climbs
+// onto meshed ground now and is fought like any other boss. It holds one row
+// today: Majordomo Executus, in Molten Core.
 //
-// So what these tests pin is (a) that the facility still behaves as an empty
-// table should, (b) the opt-in DEFAULTS a future row would inherit, and (c) that
-// Ghaz'an specifically is NOT pulled back and IS anchored on his platform. (c)
-// is the regression guard: re-adding the row would silently restore a 150yd
-// force-aggro and a teleport-summon on a boss that no longer needs either.
+// So what these tests pin is (a) that a map with no row still pays nothing,
+// (b) the opt-in DEFAULTS a new row inherits, (c) that Ghaz'an specifically is
+// NOT pulled back and IS anchored on his platform — the regression guard:
+// re-adding the row would silently restore a 150yd force-aggro and a
+// teleport-summon on a boss that no longer needs either — and (d) the measured
+// geometry each live row is only correct because of.
 
 namespace
 {
@@ -36,9 +38,12 @@ namespace
     constexpr float kPlatformMeshZ = 81.45f;    // probed navmesh on his platform deck
     constexpr float kPlatformX = 256.28f;       // waypoint path 1383921, final node
     constexpr float kPlatformY = -458.73f;
+
+    constexpr uint32 kMoltenCore = 409;
+    constexpr uint32 kMajordomo = 12018;
 }
 
-TEST(DungeonClearBossPullbackTest, MajordomoIsTheOnlyRow)
+TEST(DungeonClearBossPullbackTest, MajordomoIsPulledBackToTheChamberMouth)
 {
     // The table was empty by design until a boss turned up whose room, not an
     // upstream defect, is what kills the party: Majordomo Executus is fought round
@@ -46,14 +51,19 @@ TEST(DungeonClearBossPullbackTest, MajordomoIsTheOnlyRow)
     EXPECT_EQ(BossPullbackRegistry::Find(kUnderbog, kGhazan), nullptr);
     EXPECT_FALSE(BossPullbackRegistry::HasRows(kUnderbog));
 
-    BossPullback const* row = BossPullbackRegistry::Find(409, 12018);
+    BossPullback const* row = BossPullbackRegistry::Find(kMoltenCore, kMajordomo);
     ASSERT_NE(row, nullptr);
-    EXPECT_TRUE(BossPullbackRegistry::HasRows(409));
-    EXPECT_EQ(BossPullbackRegistry::Find(409, 11988), nullptr);  // Golemagg is fought where he stands
+    EXPECT_TRUE(BossPullbackRegistry::HasRows(kMoltenCore));
+    EXPECT_EQ(BossPullbackRegistry::Find(kMoltenCore, 11988), nullptr);  // Golemagg is fought where he stands
 
-    // An ordinary tag: no forced aggro, no relocation.
+    // An ordinary tag: no forced aggro, no relocation — and no tag window. He
+    // stands where his script summons him, so the pull arms the moment the raid
+    // is on the anchor, exactly as it did before that field existed.
     EXPECT_FLOAT_EQ(row->forceAggroRange, 0.0f);
     EXPECT_FALSE(row->summonWhenStuckBelow);
+    EXPECT_FALSE(row->HasTagWindow());
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(*row, 759.5f, -1173.4f));
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(*row, 0.0f, 0.0f));
 
     // The anchor has to stand well clear of the Hot Coal trap (736.7,-1176.3) and
     // the straight tag leg to his summon point (759.5,-1173.4) has to miss it too.
@@ -112,6 +122,46 @@ TEST(DungeonClearBossPullbackTest, SummonWhenStuckDefaultsOff)
 {
     BossPullback const fresh;
     EXPECT_FALSE(fresh.summonWhenStuckBelow);
+}
+
+// The tag window is the third opt-in and keeps the same contract: off unless a
+// row types a radius out. "Off" has to mean "always in the window", not "never"
+// — a row that did not ask for one must keep arming the way it always has.
+TEST(DungeonClearBossPullbackTest, TagWindowDefaultsOff)
+{
+    BossPullback const fresh;
+    EXPECT_FLOAT_EQ(fresh.tagRadius, 0.0f);
+    EXPECT_FALSE(fresh.HasTagWindow());
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(fresh, 0.0f, 0.0f));
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(fresh, 5000.0f, -5000.0f));
+
+    // A centre with no radius is still no window: the radius is the switch.
+    BossPullback centred;
+    centred.tagX = 100.0f;
+    centred.tagY = 200.0f;
+    EXPECT_FALSE(centred.HasTagWindow());
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(centred, -900.0f, 900.0f));
+}
+
+TEST(DungeonClearBossPullbackTest, TagWindowIsAFlatDiscRoundItsCentre)
+{
+    BossPullback row;
+    row.tagX = 100.0f;
+    row.tagY = -200.0f;
+    row.tagRadius = 10.0f;
+    ASSERT_TRUE(row.HasTagWindow());
+
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(row, 100.0f, -200.0f));   // centre
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(row, 106.0f, -208.0f));   // 10yd: the edge counts
+    EXPECT_TRUE(BossPullbackRegistry::InTagWindow(row, 100.0f, -190.5f));
+    EXPECT_FALSE(BossPullbackRegistry::InTagWindow(row, 100.0f, -189.5f));  // 10.5yd north
+    EXPECT_FALSE(BossPullbackRegistry::InTagWindow(row, 108.0f, -208.0f));  // 11.3yd on the diagonal
+    EXPECT_FALSE(BossPullbackRegistry::InTagWindow(row, 0.0f, 0.0f));
+
+    // Measured from the window's own centre, never from the anchor.
+    row.campX = 100.0f;
+    row.campY = -100.0f;
+    EXPECT_FALSE(BossPullbackRegistry::InTagWindow(row, 100.0f, -100.0f));
 }
 
 TEST(DungeonClearBossPullbackTest, GhazanIsAnchoredOnHisPlatform)

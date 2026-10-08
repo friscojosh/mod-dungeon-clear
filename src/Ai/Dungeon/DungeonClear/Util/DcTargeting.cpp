@@ -721,18 +721,34 @@ Unit* DcTargeting::FindPullTarget(PlayerbotAI* botAI, DungeonBossInfo const& nex
     // null mid-leg, the Advancing branch would read that as "target gone", reset
     // the FSM to Idle, and the maneuver would restart from scratch every time the
     // tank stepped away — a livelock with the party parked at camp forever.
+    //
+    // A row with a TAG WINDOW (BossPullback::tagX — a patrolling boss) adds one
+    // more condition to arming, and it drops at the same moment for the same
+    // reason: he is only the target while his live position is inside the window,
+    // UNTIL the pull commits. After that he is the target wherever he walks. This
+    // must agree with IsPullbackBossDue tick for tick — a target the trigger is
+    // not going to pull is a target every other reader of this value (the
+    // governor, the blocking-trash stand-down, the camp-trail gate) would be aimed
+    // at for the minutes he spends on the far side of his loop.
     DcPullContext const& pullCtx =
         context->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
-    if (next.kind == DungeonAnchorKind::Boss &&
-        BossPullbackRegistry::Find(bot->GetMapId(), next.entry) &&
+    BossPullback const* const pullbackRow =
+        next.kind == DungeonAnchorKind::Boss
+            ? BossPullbackRegistry::Find(bot->GetMapId(), next.entry) : nullptr;
+    if (pullbackRow &&
         (pullCtx.bossPullback || DcTickMemoAccess::AtBossEngage(bot, context, next)))
     {
         Creature* const pullbackBoss = GetLiveBoss(bot, context, next.entry);
-        if (pullbackBoss && pullbackBoss->IsAlive())
+        if (pullbackBoss && pullbackBoss->IsAlive() &&
+            (pullCtx.bossPullback ||
+             BossPullbackRegistry::InTagWindow(*pullbackRow,
+                                               pullbackBoss->GetPositionX(),
+                                               pullbackBoss->GetPositionY())))
             return pullbackBoss;
-        // Not loaded / already dead: fall through. The corridor scan below vetoes
-        // bosses anyway, so this degrades to "no pull target", and the at-boss
-        // engage's own not-present handling reports it.
+        // Not loaded / already dead / not yet inside his tag window: fall through.
+        // The corridor scan below vetoes bosses anyway, so this degrades to "no
+        // pull target", and the at-boss engage's own handling reports it (the
+        // not-present stall, or the wait for his patrol to come round).
     }
 
     // Same look-ahead / band the blocking-trash trigger uses; keep them aligned
@@ -1270,15 +1286,27 @@ bool DcTargeting::IsPullbackBossDue(Player* bot, AiObjectContext* ctx)
         ctx->GetValue<std::optional<DungeonBossInfo>>(DcKey::NextDungeonBoss)->Get();
     if (!next.has_value() || next->kind != DungeonAnchorKind::Boss)
         return false;
-    if (!BossPullbackRegistry::Find(bot->GetMapId(), next->entry))
+    BossPullback const* const row =
+        BossPullbackRegistry::Find(bot->GetMapId(), next->entry);
+    if (!row)
         return false;
 
     // At the ANCHOR (IsAtBossEngage measures the anchor for a pull-back boss), and
     // the boss actually there to be fetched.
     if (!DcTickMemoAccess::AtBossEngage(bot, ctx, *next))
         return false;
+
     Creature* const boss = GetLiveBoss(bot, ctx, next->entry);
-    return boss && boss->IsAlive();
+    if (!boss || !boss->IsAlive())
+        return false;
+
+    // A patrolling boss is only fetched from the stretch of his path the row
+    // names. Always true for a row with no tag window. Deliberately not consulted
+    // once the pull has committed — the trigger ORs this predicate with
+    // DcPullContext::bossPullback, and FindPullTarget drops the same test on the
+    // same flag — so the window delays the START of a pull and nothing else.
+    return BossPullbackRegistry::InTagWindow(*row, boss->GetPositionX(),
+                                             boss->GetPositionY());
 }
 bool DcTargeting::RoomClearForcesAdvanced(Player* bot, AiObjectContext* ctx)
 {

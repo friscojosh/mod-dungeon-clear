@@ -7,7 +7,11 @@
 
 #include <cmath>
 
+#include <utility>
+#include <vector>
+
 #include "Ai/Dungeon/DungeonClear/Data/BossPullbackRegistry.h"
+#include "Ai/Dungeon/DungeonClear/Data/ScriptedPullRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
 
 // Pull-back bosses (BossPullbackRegistry) — the "this boss must be fought
@@ -16,8 +20,8 @@
 // The table's FIRST row (Ghaz'an) was retired in S1593 once the cause was fixed
 // upstream: he sat in the lake only because a headless party never fired
 // areatrigger 4302, the sole caller of his ACTION_MOVE_TO_PLATFORM. He climbs
-// onto meshed ground now and is fought like any other boss. It holds one row
-// today: Majordomo Executus, in Molten Core.
+// onto meshed ground now and is fought like any other boss. It holds two rows
+// today, both in Molten Core: Majordomo Executus and Baron Geddon.
 //
 // So what these tests pin is (a) that a map with no row still pays nothing,
 // (b) the opt-in DEFAULTS a new row inherits, (c) that Ghaz'an specifically is
@@ -41,6 +45,28 @@ namespace
 
     constexpr uint32 kMoltenCore = 409;
     constexpr uint32 kMajordomo = 12018;
+    constexpr uint32 kGeddon = 12056;
+    constexpr uint32 kShazzrah = 12264;
+
+    // Baron Geddon's waypoint path 566550 (acore_world.waypoint_data), nodes 1-17
+    // in order. One direction only, and a loop: 17 runs back to 1. Index = node - 1.
+    std::vector<std::pair<float, float>> const& GeddonPath()
+    {
+        static std::vector<std::pair<float, float>> const kPath{
+            {747.5f, -981.7f}, {740.0f, -953.2f}, {716.3f, -910.9f}, {701.4f, -887.8f},
+            {675.8f, -847.8f}, {639.1f, -830.6f}, {611.1f, -828.0f}, {591.2f, -811.5f},
+            {608.8f, -787.7f}, {643.6f, -778.0f}, {664.3f, -786.4f}, {661.7f, -816.7f},
+            {678.6f, -847.1f}, {699.6f, -878.1f}, {718.3f, -907.5f}, {740.4f, -949.4f},
+            {746.6f, -966.6f}};
+        return kPath;
+    }
+
+    float Dist2d(float ax, float ay, float bx, float by)
+    {
+        float const dx = ax - bx;
+        float const dy = ay - by;
+        return std::sqrt(dx * dx + dy * dy);
+    }
 }
 
 TEST(DungeonClearBossPullbackTest, MajordomoIsPulledBackToTheChamberMouth)
@@ -162,6 +188,121 @@ TEST(DungeonClearBossPullbackTest, TagWindowIsAFlatDiscRoundItsCentre)
     row.campX = 100.0f;
     row.campY = -100.0f;
     EXPECT_FALSE(BossPullbackRegistry::InTagWindow(row, 100.0f, -100.0f));
+}
+
+TEST(DungeonClearBossPullbackTest, GeddonIsFetchedOnlyFromTheStretchThatPassesTheAnchor)
+{
+    // Baron Geddon patrols; the WHY and the measurements are in
+    // BossPullbackRegistry.cpp. What is pinned here is that the window means what
+    // the row comment says it means, against his actual waypoints.
+    BossPullback const* row = BossPullbackRegistry::Find(kMoltenCore, kGeddon);
+    ASSERT_NE(row, nullptr);
+
+    // An ordinary tag: no forced aggro, no relocation.
+    EXPECT_FLOAT_EQ(row->forceAggroRange, 0.0f);
+    EXPECT_FALSE(row->summonWhenStuckBelow);
+    ASSERT_TRUE(row->HasTagWindow());
+
+    // Nodes 10 and 11 are in; every other node of the loop is out — 9 and 12, the
+    // ones either side, by a real margin, so the pull cannot arm with him merely
+    // NEAR the window on his way in or out.
+    std::vector<std::pair<float, float>> const& path = GeddonPath();
+    ASSERT_EQ(path.size(), 17u);
+    for (size_t i = 0; i < path.size(); ++i)
+    {
+        bool const in =
+            BossPullbackRegistry::InTagWindow(*row, path[i].first, path[i].second);
+        EXPECT_EQ(in, i == 9 || i == 10) << "node " << (i + 1);
+    }
+    EXPECT_GT(Dist2d(row->tagX, row->tagY, path[8].first, path[8].second),
+              row->tagRadius + 10.0f) << "node 9 — the leg that passes the west pack";
+    EXPECT_GT(Dist2d(row->tagX, row->tagY, path[11].first, path[11].second),
+              row->tagRadius + 10.0f) << "node 12";
+
+    // The anchor is nowhere on his path: he is never standing on the camp when
+    // the raid arrives, and the camp is never inside the window it waits on.
+    for (size_t i = 0; i < path.size(); ++i)
+        EXPECT_GT(Dist2d(row->campX, row->campY, path[i].first, path[i].second), 60.0f)
+            << "node " << (i + 1);
+    EXPECT_FALSE(BossPullbackRegistry::InTagWindow(*row, row->campX, row->campY));
+
+    // And the window is the near stretch, which is the whole point of it: the tag
+    // leg from the anchor to anywhere inside it is bounded, where the leg to the
+    // far end of the loop (node 1) is well over twice that.
+    EXPECT_LT(Dist2d(row->campX, row->campY, row->tagX, row->tagY) + row->tagRadius,
+              120.0f);
+    EXPECT_GT(Dist2d(row->campX, row->campY, path[0].first, path[0].second), 250.0f);
+}
+
+TEST(DungeonClearBossPullbackTest, GeddonsAnchorIsOnePointInThreeTables)
+{
+    // The pull-back row's camp, the roster anchor boss navigation walks the raid
+    // to, and the camp of every scripted stage that clears the ground in front of
+    // it are the same point by design. Any one of them drifting leaves the raid
+    // waiting somewhere the tank does not drag him to.
+    BossPullback const* row = BossPullbackRegistry::Find(kMoltenCore, kGeddon);
+    ASSERT_NE(row, nullptr);
+
+    bool found = false;
+    for (BossRosterPatch const& patch : BossRosterRegistry::AllPatches())
+    {
+        if (patch.mapId != kMoltenCore)
+            continue;
+
+        for (DungeonBossInfo const& b : patch.add)
+        {
+            if (b.entry != kGeddon)
+                continue;
+            found = true;
+            EXPECT_EQ(b.kind, DungeonAnchorKind::Boss);
+            EXPECT_FLOAT_EQ(b.x, row->campX);
+            EXPECT_FLOAT_EQ(b.y, row->campY);
+            EXPECT_FLOAT_EQ(b.z, row->campZ);
+            // Re-added, so it must inherit its own kill-bit back off the base list,
+            // and it takes the order slot Shazzrah gives up.
+            EXPECT_EQ(b.inheritCompletionFrom, kGeddon);
+            EXPECT_EQ(b.orderOverride, 4);
+
+            // ...and the derived (spawn) anchor must actually be removed, else both
+            // copies survive and the clear walks to his spawn anyway.
+            bool removed = false;
+            for (uint32 e : patch.remove)
+                if (e == kGeddon)
+                    removed = true;
+            EXPECT_TRUE(removed);
+
+            // Shazzrah moves behind him, as a KEPT entry (so his anchor and bit
+            // stay derived).
+            bool shazzrahAfter = false;
+            for (auto const& r : patch.reorder)
+                if (r.first == kShazzrah && r.second == 5)
+                    shazzrahAfter = true;
+            EXPECT_TRUE(shazzrahAfter);
+            for (uint32 e : patch.remove)
+                EXPECT_NE(e, kShazzrah);
+        }
+    }
+    EXPECT_TRUE(found) << "the Molten Core roster patch no longer re-anchors Baron Geddon";
+
+    std::vector<ScriptedPullStage const*> const stages =
+        ScriptedPullRegistry::Rows(kMoltenCore);
+    ASSERT_EQ(stages.size(), 3u);
+    for (ScriptedPullStage const* s : stages)
+    {
+        EXPECT_EQ(s->bossEntry, kGeddon) << "stage " << s->order;
+        EXPECT_FLOAT_EQ(s->campX, row->campX) << "stage " << s->order;
+        EXPECT_FLOAT_EQ(s->campY, row->campY) << "stage " << s->order;
+        EXPECT_FLOAT_EQ(s->campZ, row->campZ) << "stage " << s->order;
+
+        // The anchor stands well back from the packs it is the camp for...
+        EXPECT_GT(Dist2d(row->campX, row->campY, s->packX, s->packY), 45.0f + s->packRadius)
+            << "stage " << s->order;
+        // ...and no pack is left standing between it and the window: every staged
+        // cylinder is nearer the anchor than the far edge of the window is.
+        EXPECT_LT(Dist2d(row->campX, row->campY, s->packX, s->packY),
+                  Dist2d(row->campX, row->campY, row->tagX, row->tagY) + row->tagRadius)
+            << "stage " << s->order;
+    }
 }
 
 TEST(DungeonClearBossPullbackTest, GhazanIsAnchoredOnHisPlatform)

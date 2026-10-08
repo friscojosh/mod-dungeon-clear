@@ -14,7 +14,8 @@
 #include "Ai/Dungeon/DungeonClear/Data/ScriptedPullRegistry.h"
 
 // The scripted-pull plans on Magisters' Terrace (585): Selin Fireheart's room
-// (orders 0-1) and the Delrissa rotunda (orders 2-6).
+// (orders 0-1) and the Delrissa rotunda (orders 2-6). Molten Core's plan (409, the
+// three packs ahead of Baron Geddon) has its own fixture and tests at the bottom.
 //
 // Everything here is geometry the plans are only correct BECAUSE of — the pack
 // cylinders sized to hold their own spawns and exclude their neighbours, the arm
@@ -1796,4 +1797,278 @@ TEST(DcScriptedPullTest, TheEastRotundaRowTagsAtRangeFromTheStandSpot)
     EXPECT_GT(neHaul - eastHaul, 15.0f)
         << "the north-east pack reaches the camp within 15yd of the east pack's haul, "
            "so the two formations arrive together and the head start is gone";
+}
+
+// ---------------------------------------------------------------------------------
+// Molten Core (409): the three packs at the north end of Baron Geddon's cavern.
+//
+// A different shape of plan from either of Magisters' Terrace's, so it gets its own
+// fixture and its own assertions. There is no wall and no boss room: the three packs
+// stand in open cavern between the camp and a boss who WALKS, and the plan exists to
+// empty the ground he is tagged on and dragged across. The camp is his
+// BossPullbackRegistry anchor (see t/TestBossPullback.cpp for the tests that tie the
+// two tables and the roster patch to one point).
+//
+// Coordinates are acore_world.creature / waypoint_data for map 409, to the yard.
+namespace
+{
+    uint32 constexpr MC = 409;
+    uint32 constexpr MC_GEDDON         = 12056;
+    uint32 constexpr MC_FIREWALKER     = 11666;
+    uint32 constexpr MC_FLAMEGUARD     = 11667;
+    uint32 constexpr MC_LAVA_ELEMENTAL = 12076;
+    uint32 constexpr MC_LAVA_REAVER    = 12100;
+    uint32 constexpr MC_LAVA_SURGER    = 12101;   // patrols another passage; NOT a member
+
+    struct McSpawn
+    {
+        float x, y;
+        float wander;   // creature.wander_distance
+    };
+
+    // INDEX IS STAGE ORDER: 0 the mouth pack, 1 the pack on his path, 2 the
+    // south-east pack. Index 3 is the pack west of them (91290-91292), which no
+    // stage clears — it is in here so the cylinders and stand spots are held clear
+    // of it too.
+    std::vector<std::vector<McSpawn>> const& McPacks()
+    {
+        static std::vector<std::vector<McSpawn>> const kPacks{
+            // 0 mouth: 91288, 91289, 91286, 91287
+            {{656.0f, -746.0f, 0.0f}, {661.0f, -751.0f, 0.0f},
+             {646.0f, -753.0f, 5.0f}, {654.0f, -756.0f, 0.0f}},
+            // 1 on his path: 91261, 91264, 91262, 91263
+            {{642.0f, -787.0f, 0.0f}, {634.0f, -792.0f, 5.0f},
+             {644.0f, -794.0f, 0.0f}, {637.0f, -798.0f, 5.0f}},
+            // 2 south-east: 91277, 91278, 91279
+            {{680.0f, -801.0f, 0.0f}, {676.0f, -809.0f, 5.0f}, {679.0f, -820.0f, 5.0f}},
+            // 3 west, unstaged: 91290, 91291, 91292
+            {{608.0f, -765.0f, 0.0f}, {604.0f, -771.0f, 0.0f}, {599.0f, -776.0f, 0.0f}},
+        };
+        return kPacks;
+    }
+
+    // Baron Geddon's waypoint path 566550, nodes 1-17 in order. It is a loop: 17
+    // runs back to 1.
+    std::vector<std::pair<float, float>> const& McGeddonPath()
+    {
+        static std::vector<std::pair<float, float>> const kPath{
+            {747.5f, -981.7f}, {740.0f, -953.2f}, {716.3f, -910.9f}, {701.4f, -887.8f},
+            {675.8f, -847.8f}, {639.1f, -830.6f}, {611.1f, -828.0f}, {591.2f, -811.5f},
+            {608.8f, -787.7f}, {643.6f, -778.0f}, {664.3f, -786.4f}, {661.7f, -816.7f},
+            {678.6f, -847.1f}, {699.6f, -878.1f}, {718.3f, -907.5f}, {740.4f, -949.4f},
+            {746.6f, -966.6f}};
+        return kPath;
+    }
+
+    // Shortest 2D distance from (px,py) to his path, taken leg by leg.
+    float McDistToGeddonPath(float px, float py)
+    {
+        std::vector<std::pair<float, float>> const& path = McGeddonPath();
+        float best = 1e9f;
+        for (size_t i = 0; i < path.size(); ++i)
+        {
+            std::pair<float, float> const& a = path[i];
+            std::pair<float, float> const& b = path[(i + 1) % path.size()];
+            float const vx = b.first - a.first, vy = b.second - a.second;
+            float t = ((px - a.first) * vx + (py - a.second) * vy) / (vx * vx + vy * vy);
+            t = std::max(0.0f, std::min(1.0f, t));
+            best = std::min(best,
+                            Dist2d(px, py, a.first + t * vx, a.second + t * vy));
+        }
+        return best;
+    }
+
+    std::vector<ScriptedPullStage const*> McRows()
+    {
+        return ScriptedPullRegistry::Rows(MC);
+    }
+}
+
+TEST(DcScriptedPullTest, MoltenCoreCarriesOnePlanOfThreeStagesForGeddon)
+{
+    EXPECT_TRUE(ScriptedPullRegistry::HasRows(MC));
+
+    std::vector<ScriptedPullStage const*> const rows = McRows();
+    ASSERT_EQ(rows.size(), 3u);
+
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        ScriptedPullStage const& s = *rows[i];
+        // `order` is the stage's identity within the map (Find has no boss filter),
+        // so it has to be unique — and here it is also the index into McPacks().
+        EXPECT_EQ(s.order, static_cast<uint32>(i)) << "at index " << i;
+        EXPECT_EQ(ScriptedPullRegistry::Find(MC, static_cast<int32>(i)), rows[i]);
+        // Dormant unless HE is the run's next objective.
+        EXPECT_EQ(s.bossEntry, MC_GEDDON) << "stage " << s.order;
+
+        // ONE camp for the whole plan: the anchor he is fought on.
+        EXPECT_FLOAT_EQ(s.campX, rows[0]->campX) << "stage " << s.order;
+        EXPECT_FLOAT_EQ(s.campY, rows[0]->campY) << "stage " << s.order;
+        EXPECT_FLOAT_EQ(s.campZ, rows[0]->campZ) << "stage " << s.order;
+
+        // Ranged from the stand spot, nearest member first. Neither opt-in is set,
+        // and each would need its own measurement to justify (see the row comment).
+        EXPECT_FALSE(s.bodyPull) << "stage " << s.order;
+        EXPECT_FALSE(s.HasAvoidAnchor()) << "stage " << s.order;
+
+        EXPECT_TRUE(ScriptedPullRegistry::IsPackEntry(s, MC_FIREWALKER));
+        EXPECT_TRUE(ScriptedPullRegistry::IsPackEntry(s, MC_FLAMEGUARD));
+        EXPECT_TRUE(ScriptedPullRegistry::IsPackEntry(s, MC_LAVA_ELEMENTAL));
+        EXPECT_TRUE(ScriptedPullRegistry::IsPackEntry(s, MC_LAVA_REAVER));
+        EXPECT_EQ(s.entries.size(), 4u) << "stage " << s.order;
+        // The boss is never a member of his own plan's packs, though his path runs
+        // through one of the cylinders; nor is the trash that patrols elsewhere.
+        EXPECT_FALSE(ScriptedPullRegistry::IsPackEntry(s, MC_GEDDON));
+        EXPECT_FALSE(ScriptedPullRegistry::IsPackEntry(s, MC_LAVA_SURGER));
+    }
+}
+
+TEST(DcScriptedPullTest, MoltenCoreCylindersHoldTheirOwnPackWanderIncluded)
+{
+    std::vector<ScriptedPullStage const*> const rows = McRows();
+    ASSERT_EQ(rows.size(), 3u);
+
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        ScriptedPullStage const& s = *rows[i];
+        for (size_t j = 0; j < McPacks().size(); ++j)
+            for (McSpawn const& m : McPacks()[j])
+            {
+                float const d = Dist2d(m.x, m.y, s.packX, s.packY);
+                if (i == j)
+                {
+                    // A wanderer at the far end of its leash must still read as a
+                    // member, or a stage with one mob left would report itself
+                    // cleared while that mob is alive.
+                    EXPECT_LE(d + m.wander, s.packRadius)
+                        << "stage " << s.order << " can lose its own member at ("
+                        << m.x << "," << m.y << ") off the edge of its cylinder";
+                }
+                else
+                {
+                    // ...and a neighbour at the near end of ITS leash must not, or
+                    // the stage targets the wrong pack and never retires.
+                    EXPECT_GT(d - m.wander, s.packRadius + 10.0f)
+                        << "stage " << s.order << " cylinder reaches within 10yd of "
+                        << "pack " << j << "'s member at (" << m.x << "," << m.y << ")";
+                }
+            }
+
+        // Sanity on the predicate itself, at the cylinder's own height.
+        for (McSpawn const& m : McPacks()[i])
+            EXPECT_TRUE(ScriptedPullRegistry::InPack(s, m.x, m.y, s.packZ));
+    }
+
+    // Disjoint outright, not merely "no spawn of one inside the other".
+    for (size_t i = 0; i < rows.size(); ++i)
+        for (size_t j = i + 1; j < rows.size(); ++j)
+            EXPECT_GT(Dist2d(rows[i]->packX, rows[i]->packY, rows[j]->packX, rows[j]->packY),
+                      rows[i]->packRadius + rows[j]->packRadius)
+                << "stages " << rows[i]->order << " and " << rows[j]->order << " overlap";
+}
+
+TEST(DcScriptedPullTest, MoltenCoreStandSpotsTagAtRangeFromTheCampSide)
+{
+    std::vector<ScriptedPullStage const*> const rows = McRows();
+    ASSERT_EQ(rows.size(), 3u);
+
+    for (size_t i = 0; i < rows.size(); ++i)
+    {
+        ScriptedPullStage const& s = *rows[i];
+
+        // Not inside ANY cylinder — its own included. A stand spot inside a pack's
+        // volume is a tank standing in the pack.
+        for (ScriptedPullStage const* other : rows)
+            EXPECT_GT(Dist2d(s.standX, s.standY, other->packX, other->packY),
+                      other->packRadius)
+                << "stage " << s.order << " stand spot is inside stage " << other->order
+                << "'s cylinder";
+
+        // Its own nearest member is inside a 30yd opener with room to spare, and
+        // outside the ~22yd an elite two levels up notices a tank from.
+        float nearest = 1e9f;
+        for (McSpawn const& m : McPacks()[i])
+            nearest = std::min(nearest, Dist2d(s.standX, s.standY, m.x, m.y));
+        EXPECT_LT(nearest, 28.0f) << "stage " << s.order << ": nothing in opener range";
+        EXPECT_GT(nearest, 24.0f) << "stage " << s.order << ": the spot is a body pull";
+
+        // Every pack still ALIVE when this spot is used — the later stages and the
+        // unstaged west pack — is more than 25yd off, wander included.
+        for (size_t j = i + 1; j < McPacks().size(); ++j)
+            for (McSpawn const& m : McPacks()[j])
+                EXPECT_GT(Dist2d(s.standX, s.standY, m.x, m.y) - m.wander, 25.0f)
+                    << "stage " << s.order << " stand spot is within 25yd of live pack "
+                    << j << "'s member at (" << m.x << "," << m.y << ")";
+
+        // On the camp side: the tank walks OUT to the spot and the pack is beyond it.
+        float const campToPack  = Dist2d(s.campX, s.campY, s.packX, s.packY);
+        float const campToStand = Dist2d(s.campX, s.campY, s.standX, s.standY);
+        EXPECT_LT(campToStand, campToPack) << "stage " << s.order;
+        EXPECT_LT(Dist2d(s.standX, s.standY, s.packX, s.packY), campToPack)
+            << "stage " << s.order << ": the stand spot is on the far side of the camp";
+    }
+}
+
+TEST(DcScriptedPullTest, MoltenCoreStandSpotsAreOffGeddonsLineButNotOutOfHisReach)
+{
+    // What can honestly be asserted about the boss this plan is working around.
+    //
+    // The pack on his path is 9yd from node 10, so no spot inside opener range of it
+    // can be far from his line; the plan does not pretend otherwise. What the rows
+    // DO guarantee is that no stand spot is ON the line — the tank is never parked
+    // where he walks — and that the first stage, which runs before either of the
+    // others can, is nowhere near it. If he is passing while stage 1 or 2 is taken,
+    // he will come; nothing here waits for him to be elsewhere.
+    std::vector<ScriptedPullStage const*> const rows = McRows();
+    ASSERT_EQ(rows.size(), 3u);
+
+    EXPECT_GT(McDistToGeddonPath(rows[0]->standX, rows[0]->standY), 45.0f);
+    EXPECT_GT(McDistToGeddonPath(rows[1]->standX, rows[1]->standY), 15.0f);
+    EXPECT_GT(McDistToGeddonPath(rows[2]->standX, rows[2]->standY), 25.0f);
+
+    // The fixture's own claim, so the numbers above are read against the right
+    // geometry: the on-path pack really is on his path.
+    float onPath = 1e9f;
+    for (McSpawn const& m : McPacks()[1])
+        onPath = std::min(onPath, McDistToGeddonPath(m.x, m.y));
+    EXPECT_LT(onPath, 10.0f);
+}
+
+TEST(DcScriptedPullTest, MoltenCoreCampIsOutOfEveryPacksReachAndArmsFromTheAnchor)
+{
+    std::vector<ScriptedPullStage const*> const rows = McRows();
+    ASSERT_EQ(rows.size(), 3u);
+
+    // Further from every spawn than the 40yd a range-mode caster answers a pull
+    // from by planting instead of coming.
+    float nearestSpawn = 1e9f;
+    for (std::vector<McSpawn> const& pack : McPacks())
+        for (McSpawn const& m : pack)
+            nearestSpawn = std::min(nearestSpawn,
+                                    Dist2d(rows[0]->campX, rows[0]->campY, m.x, m.y) -
+                                        m.wander);
+    EXPECT_GT(nearestSpawn, 40.0f + DC_SCRIPTED_PULL_LEASH);
+
+    for (ScriptedPullStage const* s : rows)
+    {
+        // Armed from the camp itself: on this plan "the tank has walked up to the
+        // camp" and "the tank has walked up to the work" are the same event.
+        EXPECT_FALSE(s->HasArmAnchor()) << "stage " << s->order;
+        EXPECT_TRUE(ScriptedPullRegistry::InArmRange(*s, s->campX, s->campY, s->campZ));
+
+        // WIDER THAN THE AT-BOSS RADIUS. The camp is a pull-back boss's anchor, so
+        // the tank counts as "at the boss" within BossEngageRange of it (30yd at
+        // the default BossEngageRangeCap) and Advance walks it no closer. A stage
+        // that could not arm from everywhere inside that radius would read "not
+        // due" to a tank standing still — and the boss tag waits on exactly that
+        // reading, so he would be tagged with the packs alive.
+        EXPECT_GT(s->armRadius, 30.0f + 3.0f) << "stage " << s->order;
+        // ...and still short of every pack, so it cannot arm off a tank among them.
+        EXPECT_LT(s->armRadius, nearestSpawn - 25.0f) << "stage " << s->order;
+
+        // The three share one gate, so SelectOrder always sees all of them at once
+        // and the order cannot be skipped by standing somewhere only a later stage
+        // arms from.
+        EXPECT_FLOAT_EQ(s->armRadius, rows[0]->armRadius) << "stage " << s->order;
+    }
 }

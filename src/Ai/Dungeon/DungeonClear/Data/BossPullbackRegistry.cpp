@@ -75,9 +75,52 @@ namespace
         //
         // Ordinary tag: his adds notice the tank at ~35yd, which is how the fight
         // started on the live run. No force-aggro, no summon.
+        //
+        // Baron Geddon (12056, Molten Core 409). Nothing about the ground he stands
+        // on kills anyone; what kills here is that he does not stand on any. He
+        // walks waypoint path 566550, a 554yd one-way loop of 17 nodes around the
+        // cavern below Garr's tunnel, and it brings him through the three trash
+        // packs at the cavern's north end. Live (reported 2026-10-07): "late
+        // joiner: Baron Geddon (entry 12056) engaged ... at 21.6yd | camp none |
+        // party fighting: 40" — he walked into the raid while it fought trash, the
+        // fight happened where he arrived, and on Inferno the raid ran 20yd off
+        // him, into packs nobody had pulled.
+        //
+        // There is no upstream defect to fix instead. The patrol and Inferno are the
+        // encounter's own design, and the 20yd scatter and its direction belong to
+        // mod-playerbots' Molten Core strategy, not to this module. What this module
+        // owns is WHERE the fight is, so that is the fix: somewhere a 20yd scatter
+        // lands on ground that is already empty.
+        //
+        // Anchor (712.0,-710.0,-209.2): probed navmesh, in the last yards of the
+        // tunnel that comes south from Garr's room, 14yd up it from where it opens
+        // into the cavern's north-east corner. The tunnel is about 20yd wide there
+        // and this is the southernmost point on its centre line with unbroken mesh
+        // under an 8yd disc (z -209.3..-208.7); the mouth itself (701,-718) does not
+        // have one — rock stands either side of the opening. It is 90yd from the nearest
+        // node of his path (11) and 65yd from the nearest trash spawn (91289), and
+        // the three packs between it and him are emptied first, in order, by the
+        // ScriptedPullRegistry stages that share this anchor as their camp. He comes
+        // AFTER Garr and BEFORE Shazzrah (see the roster patch), so the tunnel
+        // behind the raid is cleared ground by the time anyone stands here.
+        //
+        // Tag window (650,-781) r22: holds nodes 10 (643.6,-778.0; 7.1yd from the
+        // centre) and 11 (664.3,-786.4; 15.3yd) and excludes 9 (608.8,-787.7;
+        // 41.7yd) and 12 (661.7,-816.7; 37.6yd) — 51yd of his path, entered at about
+        // (628,-782) and left at about (663,-799), the closest he ever comes to the
+        // anchor. So the tag leg is 90-111yd over the three stages' ground, never
+        // the 250yd through live packs it could be without the window, and never
+        // toward node 9, which passes 15yd from a fourth pack (91290-91292) that no
+        // stage clears. He is somewhere else on the loop most of the time; the raid
+        // waits on the anchor for him to come round.
+        //
+        // Ordinary tag, like Majordomo: no force-aggro, no summon.
+        //
+        // Not yet run live.
         static std::vector<BossPullback> const rows = {
             // map  entry  anchor x  y  z  forceAggro  summonIfStuck  tag x  y  radius
             { 409, 12018, 714.7f, -1205.3f, -119.6f },
+            { 409, 12056, 712.0f, -710.0f, -209.2f, 0.0f, false, 650.0f, -781.0f, 22.0f },
         };
         return rows;
     }

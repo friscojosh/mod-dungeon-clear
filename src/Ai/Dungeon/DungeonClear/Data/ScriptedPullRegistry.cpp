@@ -478,6 +478,14 @@ namespace
     uint32 constexpr MGT_SISTER_TORMENT = 24697;
     uint32 constexpr MGT_ETHEREUM_SMUG  = 24698;
 
+    // Molten Core (409): the trash at the north end of Baron Geddon's cavern.
+    uint32 constexpr MC_MAP            = 409;
+    uint32 constexpr MC_BARON_GEDDON   = 12056;
+    uint32 constexpr MC_FIREWALKER     = 11666;
+    uint32 constexpr MC_FLAMEGUARD     = 11667;
+    uint32 constexpr MC_LAVA_ELEMENTAL = 12076;
+    uint32 constexpr MC_LAVA_REAVER    = 12100;
+
     // The rotunda's two camps and its arm anchor. The BACK camp is the hall below the
     // south neck and serves the hall patrol and the south pack; the FORWARD camp is
     // against the small room's east wall and serves the four rows that run once the
@@ -646,6 +654,128 @@ namespace
                 // neighbours the body pull does not; the east row's neighbour comes
                 // either way, so that row spends the opener instead of the 8yd.
                 s.bodyPull   = r.bodyPull;
+                t.push_back(s);
+            }
+
+            // --- Molten Core: the cavern's north end, ahead of Baron Geddon ------
+            //
+            // Three packs stand between the tunnel down from Garr's room and the
+            // stretch of Baron Geddon's patrol the raid tags him from, and he is
+            // dragged back across all three. So they go first, one at a time, to the
+            // same anchor he is fought on. See his row in BossPullbackRegistry.cpp
+            // for why he is fought there at all; this plan is what makes the ground
+            // between there and him empty.
+            //
+            // THE FIRST PLAN THAT SHARES ITS BOSS WITH A PULL-BACK ROW. Two things
+            // follow, and both are handled at the pull trigger rather than here:
+            // the stages come before the boss (DcTargeting::IsPullbackBossDue is
+            // false while one is due), and the at-boss stand-down lets them through
+            // (the tank is "at" a pull-back boss whenever it is on his anchor, which
+            // for this plan is always).
+            //
+            // ORDER 0-2 on map 409, which had no rows. Mouth pack, then the pack on
+            // his path, then the one south-east of it: nearest the camp first, so
+            // every tag leg and every drag crosses only ground the earlier stages
+            // emptied. Spawns (creature.guid, x, y; all on one floor, mesh z -208.0
+            // to -208.8), wander radius in brackets:
+            //
+            //   0 mouth     91288 Flameguard (656,-746)   91289 Lava Elemental (661,-751)
+            //               91286 Firewalker (646,-753) [5]   91287 Lava Elemental (654,-756)
+            //   1 on-path   91261 Firewalker (642,-787)   91264 Lava Elemental (634,-792) [5]
+            //               91262 Lava Elemental (644,-794)   91263 Flameguard (637,-798) [5]
+            //   2 south-east 91277 Firewalker (680,-801)  91278 Lava Reaver (676,-809) [5]
+            //               91279 Flameguard (679,-820) [5]
+            //
+            // CYLINDERS hold every spawn plus its wander and nothing else. Worst
+            // member, spawn-to-centre plus wander, against the radius: mouth 12.8 of
+            // 14, on-path 10.6 of 13, south-east 14.5 of 16. Nearest outsider,
+            // less ITS wander, beyond the edge: mouth 23.8yd (91261), on-path 21.9yd
+            // (91278), south-east 22.2yd (91262). A fourth pack west of these
+            // (91290-91292, about (604,-771)) is NOT staged — it is off the tag leg
+            // and off the drag — and is 28.8yd clear of the nearest cylinder.
+            // Geddon's own path crosses the on-path cylinder; he is not an entry.
+            //
+            // STAND SPOTS are on the camp side of each pack, on probed mesh, 26.2 /
+            // 26.2 / 26.6yd from the pack's nearest member — inside a 30yd opener
+            // with the margin Selin's rows keep. From each, the nearest member of
+            // every pack still alive when it is used:
+            //
+            //   0 (680,-733)   on-path 66.0   south-east 68.0   west 78.8
+            //   1 (659,-767)                  south-east 40.0   west 51.0
+            //   2 (689,-776)                                    west 81.7
+            //
+            // RANGED, all three (bodyPull stays false). A body pull earns its 8yd of
+            // extra walk-in only where a neighbour is a near miss on the family
+            // assistance radius at spawn; the closest two members of different packs
+            // here are 33yd apart (91287 / 91261), three times that radius, so there
+            // is no separation for the opener to cost. No `avoid` anchor either —
+            // that is for a neighbour that comes regardless, and none does.
+            //
+            // CASTERS: not checked. These four entries' smart_scripts castFlags were
+            // not read for this plan, so whether any of them plants at range is
+            // unknown. What is known is that it does not change the camp: the anchor
+            // is 65yd from the nearest spawn, far past the 40yd a range-mode caster
+            // answers from, and a caster that then stands off the tank at 25-35yd is
+            // what the walking camp (DC_SCRIPTED_PULL_CAMP_STEP) is for.
+            //
+            // THE ARM GATE is the camp (no separate anchor) at 35yd, and the number
+            // is a floor, not a preference. On this boss the tank counts as "at the
+            // boss" inside BossEngageRange of the anchor — 30yd at the default cap —
+            // and Advance stops walking it closer there. A stage that could not arm
+            // from everywhere inside that radius would read "not due" to a tank
+            // standing still, and the boss tag is gated on exactly that reading. 35
+            // covers the default cap with room; it reaches 35yd back up the tunnel
+            // the raid has just cleared and stops 30yd short of the nearest spawn.
+            //
+            // THE ONE THING THIS PLAN DOES NOT SOLVE IS GEDDON HIMSELF. The on-path
+            // pack is 9yd from node 10 of his patrol, so no stand spot inside opener
+            // range of it can be far from his line: stage 1's is 16.0yd from it, and
+            // stage 2's 26.8yd. A stage taken while he is passing will bring him.
+            // Nothing here waits for him to be elsewhere — the tag window delays his
+            // pull, not these.
+            //
+            // Not yet run live.
+            float constexpr MC_GEDDON_CAMP_X = 712.0f, MC_GEDDON_CAMP_Y = -710.0f,
+                            MC_GEDDON_CAMP_Z = -209.2f;
+            float constexpr MC_GEDDON_ARM_R  = 35.0f;
+            // One floor. The band only has to cover the yard of relief between the
+            // spawns and a cylinder's authored centre.
+            float constexpr MC_GEDDON_ZBAND  = 8.0f;
+
+            std::vector<uint32> const cavern = {
+                MC_FIREWALKER, MC_FLAMEGUARD, MC_LAVA_ELEMENTAL, MC_LAVA_REAVER};
+
+            struct CavernRow
+            {
+                uint32 order;
+                char const* name;
+                float standX, standY, standZ;
+                float packX, packY, packZ, packRadius;
+            };
+            CavernRow const cavernRows[] = {
+                {0, "Molten Core — Baron Geddon's cavern, mouth pack",
+                 680.0f, -733.0f, -208.9f, 653.5f, -751.0f, -208.8f, 14.0f},
+                {1, "Molten Core — Baron Geddon's cavern, pack on his path",
+                 659.0f, -767.0f, -208.8f, 639.5f, -793.0f, -208.0f, 13.0f},
+                {2, "Molten Core — Baron Geddon's cavern, south-east pack",
+                 689.0f, -776.0f, -209.0f, 678.5f, -810.5f, -208.8f, 16.0f},
+            };
+            for (CavernRow const& r : cavernRows)
+            {
+                ScriptedPullStage s;
+                s.mapId      = MC_MAP;
+                s.bossEntry  = MC_BARON_GEDDON;
+                s.order      = r.order;
+                s.name       = r.name;
+                s.campX      = MC_GEDDON_CAMP_X; s.campY = MC_GEDDON_CAMP_Y;
+                s.campZ      = MC_GEDDON_CAMP_Z;
+                s.standX     = r.standX;       s.standY = r.standY;      s.standZ = r.standZ;
+                s.packX      = r.packX;        s.packY  = r.packY;       s.packZ  = r.packZ;
+                s.packRadius = r.packRadius;
+                s.packZBand  = MC_GEDDON_ZBAND;
+                // armX/armY/armZ left at (0,0,0): measured from the camp.
+                s.armRadius  = MC_GEDDON_ARM_R;
+                s.entries    = cavern;
                 t.push_back(s);
             }
 

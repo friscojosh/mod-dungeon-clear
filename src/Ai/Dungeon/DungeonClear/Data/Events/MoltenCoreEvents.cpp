@@ -57,6 +57,8 @@ namespace
 
     constexpr uint32 kMajordomo = 12018;
     constexpr uint32 kRagnaros  = 11502;
+    constexpr uint32 kShazzrah  = 12264;
+    constexpr uint32 kGeddon    = 12056;
 
     // molten_core.h boss-state slots.
     constexpr int32 kSlotMajordomo = 8;
@@ -70,6 +72,13 @@ namespace
     // anchor must be this same point (boss navigation walks the party here and the
     // tank goes out alone to tag him), so keep the two in step.
     constexpr float kMajCampX = 714.7f, kMajCampY = -1205.3f, kMajCampZ = -119.6f;
+    // Where the raid FIGHTS Baron Geddon: the BossPullbackRegistry anchor in the
+    // last yards of the tunnel down from Garr's room, which is also the camp of the
+    // three ScriptedPullRegistry stages that empty the cavern's north end before he
+    // is tagged. Three tables name this one point — that row, those stages and the
+    // roster anchor below — so keep them in step (t/TestBossPullback.cpp and
+    // t/TestScriptedPull.cpp both check it).
+    constexpr float kGeddonCampX = 712.0f, kGeddonCampY = -710.0f, kGeddonCampZ = -209.2f;
     // His post-victory teleport spot by Ragnaros' lair (the gossip target):
     constexpr float kRagGossipX = 848.933f, kRagGossipY = -812.875f, kRagGossipZ = -229.601f;
     // Ragnaros' summon position (the fight anchor):
@@ -134,8 +143,33 @@ void RegisterMoltenCoreRoster(std::vector<BossRosterPatch>& t)
     BossRosterPatch p;
     p.mapId = kMapId;
 
-    // The eight statics keep their derived DBC order (bits 0-7 match the
+    // Six of the eight statics keep their derived DBC order (bits 0-7 match the
     // classic clear path). The finale slots in after them.
+    //
+    // BARON GEDDON is the exception, twice over.
+    //
+    // His ANCHOR moves. Derived, it is his spawn — one node of a 554yd patrol he is
+    // almost never standing on — and boss navigation would walk the raid to it
+    // through every pack in the cavern. He is a pull-back boss now (see his row in
+    // BossPullbackRegistry.cpp for why), so the anchor is where the raid waits for
+    // him and fights him. remove + re-add because only that can carry hand-authored
+    // coordinates; completionFrom = his own entry keeps his real kill-bit (5),
+    // resolved off the base list before the removal takes effect.
+    //
+    // And he comes BEFORE SHAZZRAH, not after. Derived order is Shazzrah (bit 4)
+    // then Geddon (bit 5), but Shazzrah is at about (587,-802), on the far side of
+    // the cavern Geddon patrols, and the way to him from Garr's tunnel is across
+    // nodes 9-12 of that patrol. Working through it with Geddon alive is how he
+    // came to join a trash fight (reported 2026-10-07). Taken in this order the
+    // raid meets him at the tunnel mouth, on its own terms, with the cavern still
+    // in front of it. Geddon takes key 4 on the re-add; Shazzrah, a kept entry, is
+    // moved to 5 by `reorder` (which only touches entries that survive removal, so
+    // the two do not collide). Both keep their own kill-bits.
+    p.remove = {kGeddon};
+    p.reorder = {{kShazzrah, 5}};
+    p.add.push_back(MakeBoss(kGeddon, kMapId, "Baron Geddon",
+                             kGeddonCampX, kGeddonCampY, kGeddonCampZ,
+                             /*completionFrom*/ kGeddon, /*orderOverride*/ 4));
     p.add.push_back(MakeBoss(kMajordomo, kMapId, "Majordomo Executus",
                              kMajCampX, kMajCampY, kMajCampZ, /*completionFrom*/ 0,
                              /*orderOverride*/ 8, kSlotMajordomo));

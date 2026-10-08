@@ -24,6 +24,7 @@
 #include "ObjectMgr.h"
 #include "Player.h"
 #include "Ai/Dungeon/DungeonClear/DcApproachState.h"
+#include "Ai/Dungeon/DungeonClear/Data/BossPullbackRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonEventRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
@@ -1325,8 +1326,22 @@ bool DungeonClearPullTrigger::IsActive()
     // a PULL-BACK boss: the pull pipeline is the ONLY thing that may engage him,
     // because the walk-in engage would go to where he stands — which for Ghaz'an is
     // the middle of a lake.
+    //
+    // And a third, which only exists where the second does: a SCRIPTED STAGE due
+    // for a pull-back boss. Such a boss's anchor IS the stages' camp (Baron
+    // Geddon: three packs peeled back to the tunnel mouth, then him), so the tank
+    // is "at the boss" for the whole plan, and `pullback` is deliberately false
+    // while a stage is due — the trash comes first (IsPullbackBossDue). Without
+    // this clause the stand-down below would hand those ticks to the at-boss
+    // engage, which for a pull-back boss only holds on the anchor: the plan would
+    // sit there with its packs alive until the boss came round, and then tag him
+    // into them. Scoped to a boss WITH a pull-back row so every other scripted
+    // plan keeps the stand-down it has always had at its own boss.
+    bool const pullbackStageDue =
+        BossPullbackRegistry::Find(bot->GetMapId(), next->entry) != nullptr &&
+        DcTickMemoAccess::ScriptedStage(bot, context) != nullptr;
     if (DcTickMemoAccess::AtBossEngage(bot, context, *next) &&
-        !DcTargeting::IsRoomClearActive(bot, context) && !pullback)
+        !DcTargeting::IsRoomClearActive(bot, context) && !pullback && !pullbackStageDue)
         return false;
     if (!IsBetweenPullsReady(bot, context))
         return false;

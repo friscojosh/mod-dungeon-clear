@@ -1296,6 +1296,19 @@ bool DcTargeting::IsPullbackBossDue(Player* bot, AiObjectContext* ctx)
     if (!DcTickMemoAccess::AtBossEngage(bot, ctx, *next))
         return false;
 
+    // THE TRASH COMES FIRST. A boss can carry scripted pull stages as well as a
+    // pull-back row (Baron Geddon: three packs peeled back to the anchor, then
+    // him), and the stages exist to empty the ground the tag leg crosses. While
+    // one is due — or latched and in flight — the boss is not. The pull TARGET
+    // already resolves the stage ahead of the boss
+    // (DungeonClearPullTargetValue), so this is not what picks the pack; it is
+    // what stops this predicate from answering "tag the boss" on a tick the
+    // pipeline is being told to pull something else. No row had both until
+    // Geddon's, so nothing else is affected: with no stage for this boss the memo
+    // reads null and the line costs one compare.
+    if (DcTickMemoAccess::ScriptedStage(bot, ctx) != nullptr)
+        return false;
+
     Creature* const boss = GetLiveBoss(bot, ctx, next->entry);
     if (!boss || !boss->IsAlive())
         return false;

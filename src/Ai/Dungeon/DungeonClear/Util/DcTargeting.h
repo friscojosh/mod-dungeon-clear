@@ -268,9 +268,11 @@ public:
     // at-boss probe — and the Find misses outright while the table is empty, which
     // it has been since S1593.
     //
-    // One further condition, off by default so a plain row is unchanged: for a
-    // row with a tag window (BossPullback::tagX, a patrolling boss) his live
-    // position must be inside it. Not consulted once the pull has committed.
+    // Two further conditions, both false-by-default so a plain row is unchanged:
+    // no ScriptedPullRegistry stage for this boss is due (the trash the plan
+    // peels off comes before the boss it was peeled away from), and — for a row
+    // with a tag window (BossPullback::tagX, a patrolling boss) — his live
+    // position is inside it. Neither is consulted once the pull has committed.
     static bool IsPullbackBossDue(Player* bot, AiObjectContext* ctx);
 
     // --- Room-wide-aggro pre-clear (RoomAggroRegistry) --------------------

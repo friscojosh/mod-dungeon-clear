@@ -19,6 +19,7 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcEscapeLeap.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcFlightLeg.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcGapCloser.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcLeaderSignal.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcOculusPlan.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcSmartRest.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearUtil.h"
@@ -389,6 +390,41 @@ float DungeonClearMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
+// A PULL-BACK OR SCRIPTED DRAG ALREADY IN FLIGHT is finished, stand-down or not.
+//
+// The stand-down zeroes the pull maneuver so a raid boss fight is never steered by
+// a trash-pull FSM. But a BossPullbackRegistry drag IS the opening of the boss
+// fight, and it puts the raid in a state only the maneuver can undo: the party is
+// held PASSIVE at the anchor (GetLeaderPullInfo / GetLeaderCampHold accept
+// `bossPullback` in place of the pull-mode bool, so the stand-down lowering that
+// bool does not release them), while the tank is out on the boss. The tag lands,
+// the boss is in combat with a member, the stand-down enters on that same tick --
+// and with the maneuver inert nothing drags him home and nothing ever releases the
+// raid: the tank fights where it tagged, alone, 57yd from forty bots told to stand
+// still. That is Majordomo's row as first written (never run live) and it would be
+// Baron Geddon's.
+//
+// A scripted stage holds the party the same way (`scriptedStage >= 0`), and a
+// roster boss can join one mid-drag -- Geddon's patrol passes 9yd from one of his
+// own stages -- so it gets the same answer.
+//
+// Narrow on purpose: only the maneuver, only for those two kinds of pull, and only
+// while the phase is still holding the party (Forming / Advancing / Returning).
+// The moment the drag releases at camp the flag clears and the fight is the raid
+// strategy's, exactly as the stand-down intends. An ordinary advanced trash pull is
+// NOT exempt: there the stand-down lowers the pull-mode bool, which releases the
+// followers, so fighting in place is safe and is what the contract asks for.
+static bool HeldDragInFlight(AiObjectContext* context, std::string const& name)
+{
+    if (name != "dungeon clear pull maneuver")
+        return false;
+    DcPullContext const& pull =
+        context->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
+    if (!pull.bossPullback && pull.scriptedStage < 0)
+        return false;
+    return DcLeaderSignal::IsPullPhaseHolding(static_cast<uint32>(pull.phase));
+}
+
 float DungeonClearCombatMultiplier::GetValue(Action* action)
 {
     if (!action || !botAI || !bot)
@@ -442,6 +478,11 @@ float DungeonClearCombatMultiplier::GetValue(Action* action)
         return 1.0f;
     if (DcBossStandDown::IsActive(bot))
     {
+        // See HeldDragInFlight: the one DC rung that must outlive the stand-down,
+        // because it is the only thing that can release a raid it is holding.
+        if (HeldDragInFlight(context, name))
+            return 1.0f;
+
         switch (DcBossStandDown::ClassifyAction(name, isDcAction))
         {
             case DcBossStandDown::ActionVerdict::Stock:

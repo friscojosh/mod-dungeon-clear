@@ -6,6 +6,7 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 #include <set>
 
@@ -119,7 +120,7 @@ TEST(DungeonEventTribute, PartyHoldsAwayFromNativeInteractionTargets)
     using namespace DcDireMaulTribute;
     float x = 0.0f, y = 0.0f, z = 0.0f;
     ASSERT_TRUE(InteractionHoldPoint(TRAP_EVENT, x, y, z));
-    EXPECT_GT(558.806f - x, 40.0f);
+    EXPECT_GT(std::hypot(558.806f - x, 550.065f - y), 40.0f);
     ASSERT_TRUE(InteractionHoldPoint(DISGUISE_EVENT, x, y, z));
     EXPECT_GT(627.59f - x, 45.0f);
     EXPECT_FALSE(InteractionHoldPoint(0, x, y, z));

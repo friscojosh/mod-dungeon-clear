@@ -92,7 +92,7 @@ namespace DcDireMaulTribute
     {
         if (eventId == TRAP_EVENT)
         {
-            x = 515.0f; y = 535.0f; z = -25.2951f;
+            x = 520.0f; y = 524.0f; z = -25.4f;
             return true;
         }
         if (eventId == DISGUISE_EVENT)

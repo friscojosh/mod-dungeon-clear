@@ -784,12 +784,15 @@ namespace
             // tag window. Pull the ground-floor warlocks off the broken trap,
             // then wait for another opening before repairing it. The upper
             // gallery and Slip'kik are excluded by floor and entry respectively.
+            // The south wall projection blocks both warlocks from this camp
+            // (native VMAP rays verified). The open-floor camp at 515,535 let
+            // them stand off casting until the fight advanced into the patrol.
             ScriptedPullStage trap;
             trap.mapId = 429;
             trap.bossEntry = BossRosterRegistry::ObjectiveEntry(23);
             trap.order = 0;
             trap.name = "Dire Maul Tribute — trap warlocks";
-            trap.campX = 515.0f; trap.campY = 535.0f; trap.campZ = -25.2951f;
+            trap.campX = 520.0f; trap.campY = 524.0f; trap.campZ = -25.4f;
             trap.standX = 554.0f; trap.standY = 533.0f; trap.standZ = -25.4f;
             trap.packX = 581.0f; trap.packY = 547.0f; trap.packZ = -25.4f;
             trap.packRadius = 12.0f;

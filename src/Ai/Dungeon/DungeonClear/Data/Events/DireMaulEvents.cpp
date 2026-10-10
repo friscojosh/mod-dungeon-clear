@@ -237,13 +237,13 @@ std::vector<DungeonBossInfo> DcDireMaulTribute::BuildRoster(std::vector<DungeonB
     route.push_back(MakeObjective(OBJ(21), 70, MAP, "Leave Fengus's courtyard",
                                   385.0f, 375.0f, -0.940978f, 4.0f, 0, 0, 0, 40));
     route.push_back(MakeObjective(OBJ(22), 71, MAP, "Wait to pull the trap guards",
-                                  515.0f, 535.0f, -25.2951f, 5.0f, 0, 0, TRAP_CLEAR_WAIT_EVENT, 50));
+                                  520.0f, 524.0f, -25.4f, 5.0f, 0, 0, TRAP_CLEAR_WAIT_EVENT, 50));
     // No persistent event here: the existing scripted pull controller owns the
     // tank until the two warlocks have been brought back to this safe camp.
     route.push_back(MakeObjective(OBJ(23), 72, MAP, "Clear the trap approach",
-                                  515.0f, 535.0f, -25.2951f, 5.0f, 0, TRAP_CLEAR_HOOK, 0, 60));
+                                  520.0f, 524.0f, -25.4f, 5.0f, 0, TRAP_CLEAR_HOOK, 0, 60));
     route.push_back(MakeObjective(OBJ(15), 64, MAP, "Repair Slip'kik's trap",
-                                  515.0f, 535.0f, -25.2951f, 5.0f, 0, 0, TRAP_EVENT, 70));
+                                  520.0f, 524.0f, -25.4f, 5.0f, 0, 0, TRAP_EVENT, 70));
     // Stop short of the Captain to put the disguise on before approaching him.
     route.push_back(MakeObjective(OBJ(16), 65, MAP, "Distract Captain Kromcrush",
                                   578.0f, 481.721f, 29.4627f, 10.0f, 0, 0, DISGUISE_EVENT, 80));

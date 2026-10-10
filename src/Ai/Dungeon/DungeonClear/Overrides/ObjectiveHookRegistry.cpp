@@ -1017,6 +1017,12 @@ namespace
         if (!instance || instance->GetData(NORTH_PROGRESS) != KING_DEFEATED)
             return ObjectiveArriveResult::Blocked;
 
+        // Crowning the king is a native one-second cast. Reopening and selecting
+        // the same option on every AI tick restarts it before the aura lands.
+        if (Creature* mizzle = bot->FindNearestCreature(MIZZLE, 100.0f, true))
+            if (mizzle->IsNonMeleeSpellCast(false))
+                return ObjectiveArriveResult::Running;
+
         // Mizzle first crowns the new king, then offers the tribute. The core
         // hides the first option once aura 22799 is present, so the first
         // visible option is correct on both visits and after a resume. The

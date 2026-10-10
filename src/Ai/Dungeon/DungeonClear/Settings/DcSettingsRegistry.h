@@ -106,6 +106,10 @@ inline constexpr DcSettingDef kDcSettings[] =
     // addon override may reach.
     { "Enable",                DcType::Bool,   1,   0,   1,  false },
 
+    // Opt-in North-wing tribute route. Ordinary Dire Maul clears keep their
+    // existing boss roster; the run owner supplies the party-wide choice.
+    { "DireMaulTribute",        DcType::Bool,   0,   0,   1,  true  },
+
     { "LootMinQuality",        DcType::UInt,   0,   0,   6,  true  },
 
     // Better Loot Rolling. Master toggle for a set of fixes to mod-playerbots'

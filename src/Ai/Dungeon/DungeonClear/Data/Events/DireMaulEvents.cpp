@@ -6,8 +6,18 @@
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonRosterBuilders.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonWingRegistry.h"
+#include "Ai/Dungeon/DungeonClear/Settings/DcSettings.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcLeaderSignal.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcRunWing.h"
+#include "Ai/Dungeon/DungeonClear/Data/BossSpawnIndex.h"
+#include "Ai/Dungeon/DungeonClear/Value/DungeonBossesValue.h"
 
 #include "GameObject.h"
+#include "Group.h"
+#include "InstanceScript.h"
+#include "Map.h"
 #include "Log.h"
 #include "Player.h"
 #include "Playerbots.h"
@@ -15,7 +25,228 @@
 #include "Timer.h"
 
 #include <atomic>
+#include <algorithm>
+#include <optional>
 #include <unordered_map>
+
+namespace
+{
+    Player* TributeRunOwner(Player* bot)
+    {
+        if (!bot || bot->GetMapId() != DcDireMaulTribute::MAP)
+            return nullptr;
+        auto ownsRun = [bot](Player* member)
+        {
+            if (!member || member->GetMap() != bot->GetMap())
+                return false;
+            PlayerbotAI* ai = GET_PLAYERBOT_AI(member);
+            if (!ai)
+                return false;
+            DcRunState const& run = DcRun::Of(ai);
+            return run.direMaulTribute && run.tributeInstanceId == bot->GetInstanceId();
+        };
+        // A temporary combat strategy or a death can remove the elected tank.
+        // Protection belongs to the latched run until teardown, not to that
+        // moment's leader election. No pointer is retained across AI ticks.
+        if (ownsRun(bot))
+            return bot;
+        if (Group* group = bot->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    if (ownsRun(member))
+                        return member;
+        return nullptr;
+    }
+}
+
+bool DcDireMaulTribute::Enabled(Player* bot)
+{
+    return TributeRunOwner(bot) != nullptr;
+}
+
+bool DcDireMaulTribute::FollowerHoldPoint(Player* bot, float& x, float& y, float& z)
+{
+    Player* leader = TributeRunOwner(bot);
+    if (!leader || leader == bot)
+        return false;
+    PlayerbotAI* ai = leader ? GET_PLAYERBOT_AI(leader) : nullptr;
+    return ai && InteractionHoldPoint(DcRun::Of(ai).tributeHoldEvent, x, y, z);
+}
+
+std::string DcDireMaulTribute::BlockedReason(Player* bot, std::uint32_t eventId)
+{
+    if (!Enabled(bot))
+        return {};
+    switch (eventId)
+    {
+        case FENGUS_EVENT:
+            return "The party could not cross while Fengus was safely away. Gather on the east side of the courtyard.";
+        case TRAP_EVENT:
+        {
+            std::string missing;
+            if (!bot->HasItemCount(THORIUM_WIDGET, 1, false))
+                missing = "1 Thorium Widget";
+            if (!bot->HasItemCount(FROST_OIL, 1, false))
+                missing += (missing.empty() ? "" : " and ") + std::string("1 Frost Oil");
+            // Once the trap exists, its materials were already consumed. Do
+            // not tell the player to bring more while waiting for the guard.
+            if (!missing.empty() && bot->FindNearestGameObject(BROKEN_TRAP, 100.0f))
+                return bot->GetName() + " needs " + missing + " in their bags to repair the trap.";
+            return "Slip'kik has not been trapped. Check the broken trap and quest before continuing.";
+        }
+        case DISGUISE_EVENT:
+            if (!bot->HasAura(OGRE_DISGUISE) && !bot->GetItemByEntry(OGRE_SUIT))
+                return bot->GetName() + " needs a Gordok Ogre Suit in their bags to distract Kromcrush.";
+            return "Kromcrush has not accepted the disguise and left his post.";
+        case CLAIM_EVENT:
+            if (GameObject* chest = bot->FindNearestGameObject(CHEST, 100.0f))
+                if (chest->isSpawned() && !IsFullTribute(chest->GetLootMode()))
+                    return "The chest contains reduced tribute. This run cannot count as a full tribute.";
+            return "Mizzle has not produced a full Gordok Tribute chest.";
+        default:
+            return {};
+    }
+}
+
+bool DcDireMaulTribute::SelectForRun(Player* leader, std::string const& option, std::string& error)
+{
+    bool const namedTribute = option == "tribute" || option == "dm-tribute";
+    if (leader->GetMapId() != MAP)
+    {
+        if (namedTribute)
+            error = "Tribute mode is only available in Dire Maul North.";
+        return !namedTribute;
+    }
+    PlayerbotAI* ai = GET_PLAYERBOT_AI(leader);
+    if (!ai)
+        return false;
+    bool const requested = namedTribute || (option.empty() && DcSettings::GetBool(leader, "DireMaulTribute"));
+    DcRunState& run = DcRun::Of(ai);
+    if (run.enabled && requested != Enabled(leader))
+    {
+        error = "Stop dungeon clear before switching between normal and tribute mode.";
+        return false;
+    }
+    if (requested)
+    {
+        DungeonWingLayout const* layout = DungeonWingRegistry::Get(MAP);
+        auto const all = DungeonBossesValue::AllWings(leader);
+        std::size_t const wing = layout ? DcRunWing::PickByProximity(*layout, all, leader->GetPositionX(),
+                                                                    leader->GetPositionY(), leader->GetPositionZ()) : 0;
+        if (!layout || wing >= layout->wings.size() || layout->wings[wing].token != "dm-north")
+        {
+            error = "Enter Dire Maul North before starting tribute mode.";
+            return false;
+        }
+        if (std::none_of(all.begin(), all.end(),
+                         [](DungeonBossInfo const& boss) { return boss.entry == KING; }))
+        {
+            error = "Cannot start tribute: King Gordok is missing from the dungeon roster.";
+            return false;
+        }
+        InstanceScript* instance = leader->GetInstanceScript();
+        if (!instance)
+        {
+            error = "Cannot verify this instance's tribute progress.";
+            return false;
+        }
+        if (leader->IsInCombat())
+        {
+            error = "Leave combat before starting a tribute run.";
+            return false;
+        }
+        if (Group* group = leader->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    if (member->GetMap() == leader->GetMap() && member->IsInCombat())
+                    {
+                        error = member->GetName() + " is still in combat. Wait before starting tribute.";
+                        return false;
+                    }
+        // At a fresh North entrance no interaction has consumed supplies yet.
+        // Once the doors have progressed, leave the native hooks to recognise
+        // an already repaired trap/disguise so restarting never charges twice.
+        if (instance->GetData(NORTH_PROGRESS) == 0)
+        {
+            std::string missing;
+            auto require = [&](bool present, char const* name)
+            {
+                if (!present)
+                    missing += (missing.empty() ? "" : ", ") + std::string(name);
+            };
+            require(leader->HasItemCount(THORIUM_WIDGET, 1, false), "1 Thorium Widget");
+            require(leader->HasItemCount(FROST_OIL, 1, false), "1 Frost Oil");
+            require(leader->HasAura(OGRE_DISGUISE) || leader->GetItemByEntry(OGRE_SUIT), "a Gordok Ogre Suit");
+            if (!missing.empty())
+            {
+                error = leader->GetName() + " needs " + missing + " in their bags before starting tribute.";
+                return false;
+            }
+        }
+        uint32 const completed = instance->GetCompletedEncounterMask();
+        // Read the original encounter list, including Cho'Rush, whom the normal
+        // DC roster removes. A saved kill must refuse tribute after re-entry too.
+        for (DungeonBossInfo const& boss : BossSpawnIndex::Get(MAP, leader->GetMap()->GetDifficulty()))
+            if (IsProtectedEntry(boss.entry) && boss.encounterIndex < 32 &&
+                (completed & (1u << boss.encounterIndex)))
+            {
+                error = "Full tribute is no longer possible: " + boss.name + " has already been defeated.";
+                return false;
+            }
+    }
+    run.direMaulTribute = requested;
+    run.tributeInstanceId = leader->GetInstanceId();
+    run.tributeHoldEvent = 0;
+    run.tributeFailureReason.clear();
+    auto refresh = [](Player* member)
+    {
+        if (PlayerbotAI* memberAI = GET_PLAYERBOT_AI(member))
+        {
+            AiObjectContext* ctx = memberAI->GetAiObjectContext();
+            ctx->GetValue<std::vector<DungeonBossInfo>>(DcKey::DungeonBosses)->Reset();
+            ctx->GetValue<std::optional<DungeonBossInfo>>(DcKey::NextDungeonBoss)->Reset();
+        }
+    };
+    refresh(leader);
+    if (Group* group = leader->GetGroup())
+        for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+            if (Player* member = ref->GetSource())
+                if (member != leader)
+                    refresh(member);
+    return true;
+}
+
+std::vector<DungeonBossInfo> DcDireMaulTribute::BuildRoster(std::vector<DungeonBossInfo> const& northBosses)
+{
+    using namespace DcRoster;
+    auto king = std::find_if(northBosses.begin(), northBosses.end(),
+                            [](DungeonBossInfo const& boss) { return boss.entry == KING; });
+    if (king == northBosses.end())
+        return {}; // Missing authoritative boss data must not look like a clear.
+
+    std::vector<DungeonBossInfo> route;
+    // Navmesh-probed east corridor avoids Mol'dar, Kreeg, and the centre of
+    // Fengus's courtyard. Hold at the east wall until his native patrol passes
+    // the north rim heading west; then follow behind it to the north door.
+    route.push_back(MakeObjective(OBJ(18), 67, MAP, "Bypass the first courtyard",
+                                  475.0f, 200.0f, 2.97152f, 5.0f, 0, 0, 0, 10));
+    route.push_back(MakeObjective(OBJ(19), 68, MAP, "Wait for Fengus to pass",
+                                  480.0f, 305.0f, 2.97152f, 5.0f, 0, 0, FENGUS_EVENT, 20));
+    route.push_back(MakeObjective(OBJ(20), 69, MAP, "Round the east courtyard corner",
+                                  480.0f, 335.0f, 2.97152f, 4.0f, 0, 0, 0, 30));
+    route.push_back(MakeObjective(OBJ(21), 70, MAP, "Leave Fengus's courtyard",
+                                  385.0f, 375.0f, -0.940978f, 4.0f, 0, 0, 0, 40));
+    route.push_back(MakeObjective(OBJ(15), 64, MAP, "Repair Slip'kik's trap",
+                                  515.0f, 535.0f, -25.2951f, 5.0f, 0, 0, TRAP_EVENT, 70));
+    // Stop short of the Captain to put the disguise on before approaching him.
+    route.push_back(MakeObjective(OBJ(16), 65, MAP, "Distract Captain Kromcrush",
+                                  578.0f, 481.721f, 29.4627f, 10.0f, 0, 0, DISGUISE_EVENT, 80));
+    route.push_back(*king);
+    route.back().orderOverride = 90;
+    route.push_back(MakeObjective(OBJ(17), 66, MAP, "Claim the full Gordok Tribute",
+                                  king->x, king->y, king->z, 20.0f, 0, 0, CLAIM_EVENT, 99));
+    return route;
+}
 
 // --- Dire Maul East (map 429) — Ironbark / Conservatory Door -------------
 // Alzzin the Wildshaper's grove is sealed behind the Conservatory Door (GO
@@ -57,6 +288,32 @@ namespace
 
 void RegisterDireMaulEvents(std::vector<DungeonEvent>& out)
 {
+    out.push_back(EventBuilder(429, DcDireMaulTribute::FENGUS_EVENT, "Wait for Fengus's patrol")
+                      .Anchored(20)
+                      .Custom(DcDireMaulTribute::FENGUS_HOOK).Timeout(600000)
+                      .Persistent()
+                      .Build());
+
+    out.push_back(EventBuilder(429, DcDireMaulTribute::TRAP_EVENT, "Repair the trap and spare Slip'kik")
+                      .Anchored(70)
+                      .Custom(DcDireMaulTribute::SLIPKIK_WAIT_HOOK).Timeout(600000)
+                      .MoveTo(558.806f, 550.065f, -25.4008f, 3.0f)
+                      .Custom(DcDireMaulTribute::TRAP_HOOK).Timeout(180000)
+                      .Persistent()
+                      .Build());
+
+    out.push_back(EventBuilder(429, DcDireMaulTribute::DISGUISE_EVENT, "Disguise and distract Kromcrush")
+                      .Anchored(80)
+                      .Custom(DcDireMaulTribute::DISGUISE_HOOK).Timeout(120000)
+                      .Persistent()
+                      .Build());
+
+    out.push_back(EventBuilder(429, DcDireMaulTribute::CLAIM_EVENT, "Claim the full Gordok Tribute")
+                      .Anchored(99)
+                      .Custom(DcDireMaulTribute::CLAIM_HOOK).Timeout(180000)
+                      .Persistent()
+                      .Build());
+
     out.push_back(EventBuilder(429, 1, "Ironbark opens the Conservatory Door")
                       .Anchored(/*orderIndex, doc-only*/ 4)
                       .Gossip(/*Ironbark the Redeemed*/ 14241, /*option*/ 0,

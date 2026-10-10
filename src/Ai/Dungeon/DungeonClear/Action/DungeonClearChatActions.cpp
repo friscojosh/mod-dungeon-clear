@@ -5,6 +5,7 @@
 
 #include "DungeonClearChatActions.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 
 #include <map>
 #include <optional>
@@ -308,7 +309,7 @@ bool DcOnAction::Execute(Event event)
     // Wing choice first: on Blackrock Spire it decides which boss list the
     // emptiness check below (and the whole run) sees.
     DungeonWing const* runWing = nullptr;
-    if (!PickRunWing(botAI, bot, event.getParam(), runWing))
+    if (!PickRunWing(botAI, bot, event.getParam() == "normal" ? "" : event.getParam(), runWing))
         return false;
 
     auto const& bosses = AI_VALUE(std::vector<DungeonBossInfo>, DcKey::DungeonBosses);
@@ -327,6 +328,16 @@ bool DcOnAction::Execute(Event event)
         return false;
     }
 
+    // Commit the variant only after all ordinary start checks pass. Selecting
+    // it invalidates the party's boss caches and changes combat exclusions;
+    // a refused start must never leave those changes active.
+    std::string tributeError;
+    if (!DcDireMaulTribute::SelectForRun(bot, event.getParam(), tributeError))
+    {
+        DcRefuse(botAI, bot, tributeError);
+        return false;
+    }
+
     // Activate the "dungeon clear" strategy on the non-combat engine. This
     // is what installs the advance/engage/stall trigger ladder that actually
     // drives movement and logging; without it, flipping "enabled" below does
@@ -337,6 +348,11 @@ bool DcOnAction::Execute(Event event)
         botAI->ChangeStrategy("+dungeon clear", BOT_STATE_NON_COMBAT);
     if (!botAI->HasStrategy("dungeon clear combat", BOT_STATE_COMBAT))
         botAI->ChangeStrategy("+dungeon clear combat", BOT_STATE_COMBAT);
+
+    // A tribute retry rechecks the native trap/disguise/chest state. Its hooks
+    // are idempotent, so an earlier event timeout must not poison the new run.
+    if (DcDireMaulTribute::Enabled(bot))
+        context->GetValue<DungeonEventProgress&>(DcKey::EventProgress)->Get() = {};
 
     // Reset transient state and enable.
     DcRun::Of(context).enabled = true;
@@ -390,7 +406,8 @@ bool DcOnAction::Execute(Event event)
     std::string const target = next.has_value() ? next->name : "the next boss";
     // Say which wing was picked: a bare `dc on` at the shared Blackrock Spire
     // portal means LBRS, and `dc on ubrs` is the way to the other half.
-    std::string const wingNote = runWing ? " — " + runWing->name : "";
+    std::string const wingNote = DcDireMaulTribute::Enabled(bot) ? " — Dire Maul North Tribute"
+                                                             : runWing ? " — " + runWing->name : "";
     DcStatusPublisher::SendAddonMessage(botAI, "CHAT\tDungeon clear enabled" + wingNote +
                                                    ". Heading to " + target + ".");
 
@@ -450,6 +467,11 @@ bool DcSkipAction::Execute(Event event)
     // the leader). Without this they'd each error "not enabled".
     if (!DcLeaderSignal::IsDungeonClearLeader(bot))
         return true;
+    if (DcDireMaulTribute::Enabled(bot))
+    {
+        DcRefuse(botAI, bot, "Tribute steps cannot be skipped or reordered. Use dc off to end the tribute run.");
+        return false;
+    }
     if (!DcRun::Of(context).enabled)
     {
         DcRefuse(botAI, bot, "Dungeon clear is not enabled.");
@@ -1007,6 +1029,11 @@ bool DcGoAction::Execute(Event event)
     // stay quiet (the command/addon path already targets only the leader).
     if (!DcLeaderSignal::IsDungeonClearLeader(bot))
         return true;
+    if (DcDireMaulTribute::Enabled(bot))
+    {
+        DcRefuse(botAI, bot, "Tribute steps cannot be skipped or reordered. Use dc off to end the tribute run.");
+        return false;
+    }
     std::string const param = event.getParam();
     if (param.empty())
     {

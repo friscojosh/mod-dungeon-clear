@@ -61,6 +61,11 @@
 #include "Player.h"
 #include "PlayerScript.h"
 #include "UnitScript.h"
+#include "AllSpellScript.h"
+#include "Spell.h"
+#include "SpellInfo.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
 
 #include "Playerbots.h"
 #include "PlayerbotAI.h"
@@ -701,6 +706,59 @@ public:
     }
 };
 
+// Action multipliers do not see pet autocasts or item-triggered spells. Apply
+// the same offensive spell restriction at preparation, before an area proc can
+// select a spared guard. This does not clamp health or alter creature damage.
+class DungeonClearTributeSpellScript : public AllSpellScript
+{
+public:
+    DungeonClearTributeSpellScript()
+        : AllSpellScript("DungeonClearTributeSpellScript", { ALLSPELLHOOK_CAN_PREPARE }) {}
+
+    bool CanPrepare(Spell* spell, SpellCastTargets const* targets, AuraEffect const*) override
+    {
+        using namespace DcDireMaulTribute;
+        Unit* caster = spell && spell->GetCaster() ? spell->GetCaster()->ToUnit() : nullptr;
+        if (!DcModule::IsEnabled() || !caster || caster->GetMapId() != MAP)
+            return true;
+        Player* owner = caster->GetCharmerOrOwnerPlayerOrPlayerItself();
+        if (!owner || !GET_PLAYERBOT_AI(owner) || !Enabled(owner))
+            return true;
+        SpellInfo const* info = spell->GetSpellInfo();
+        if (!info || info->IsPositive())
+            return true;
+        if (info->IsAffectingArea())
+            return false;
+        Unit* target = targets ? targets->GetUnitTarget() : nullptr;
+        return !target || !target->IsCreature() || !IsProtectedEntry(target->GetEntry());
+    }
+};
+
+// Observe native deaths without changing damage or forcing evades. Defer
+// teardown to the leader's next AI tick so no active action is reset mid-hit.
+class DungeonClearTributeDeathScript : public UnitScript
+{
+public:
+    DungeonClearTributeDeathScript()
+        : UnitScript("DungeonClearTributeDeathScript", true, { UNITHOOK_ON_UNIT_DEATH }) {}
+
+    void OnUnitDeath(Unit* unit, Unit* /*killer*/) override
+    {
+        using namespace DcDireMaulTribute;
+        if (!DcModule::IsEnabled() || !unit || unit->GetMapId() != MAP ||
+            !unit->IsCreature() || !IsProtectedEntry(unit->GetEntry()))
+            return;
+        for (auto const& ref : unit->GetMap()->GetPlayers())
+            if (Player* player = ref.GetSource())
+                if (PlayerbotAI* ai = GET_PLAYERBOT_AI(player))
+                {
+                    DcRunState& run = DcRun::Of(ai);
+                    if (run.enabled && run.direMaulTribute && run.tributeInstanceId == unit->GetInstanceId())
+                        run.tributeFailureReason = "Tribute failed: " + unit->GetName() + " was killed.";
+                }
+    }
+};
+
 void AddSC_dungeon_clear_module()
 {
     new DungeonClearRegistrarWorldScript();
@@ -715,6 +773,8 @@ void AddSC_dungeon_clear_module()
     new DungeonClearReaperScript();
     new DungeonClearZfStraySummonScript();
     new DungeonClearEranikusCombatReleaseScript();
+    new DungeonClearTributeDeathScript();
+    new DungeonClearTributeSpellScript();
 
     // `.dc test` harness: receive each changed STATUS frame for the monitored
     // tank (addon messages only reach real players in the bot's group, and the

@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 #include "Ai/Dungeon/DungeonClear/Data/DcEventDoorRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonEventRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonClearRouteRegistry.h"
@@ -525,6 +526,18 @@ TEST(DungeonEventIntegrityTest, AnchoredEventsAreWiredByExactlyOneObjective)
             if (patch.mapId != ev.mapId)
                 continue;
             for (DungeonBossInfo const& e : patch.add)
+                if (e.kind == DungeonAnchorKind::Objective && e.eventId == ev.id)
+                    ++refs;
+        }
+        // Tribute is a selected variant rather than a global roster patch.
+        // Count its actual generated anchors too; do not exempt its events
+        // from the exactly-one-reference invariant.
+        if (ev.mapId == DcDireMaulTribute::MAP)
+        {
+            DungeonBossInfo king;
+            king.entry = DcDireMaulTribute::KING;
+            king.mapId = DcDireMaulTribute::MAP;
+            for (DungeonBossInfo const& e : DcDireMaulTribute::BuildRoster({king}))
                 if (e.kind == DungeonAnchorKind::Objective && e.eventId == ev.id)
                     ++refs;
         }

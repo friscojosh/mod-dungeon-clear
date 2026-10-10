@@ -5,6 +5,7 @@
 
 #include "DungeonClearActions.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 
 #include <algorithm>
 #include <cmath>
@@ -2228,6 +2229,11 @@ bool DcObjectiveArriveAction::Execute(Event /*event*/)
 
     if (outcome == EventDriveOutcome::Stalled)
     {
+        if (std::string reason = DcDireMaulTribute::BlockedReason(bot, next->eventId); !reason.empty())
+        {
+            StallDungeonClear(botAI, reason + " Resolve it, then use dc off and dc on tribute to retry.");
+            return true;
+        }
         // The event needs the human (something the bot can't drive). Stall so
         // the player can sort it; they can also `dc skip` past the objective.
         StallDungeonClear(botAI, "I can't progress the event at " + next->name +

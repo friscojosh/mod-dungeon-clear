@@ -5,6 +5,7 @@
 
 #include "DungeonClearMultiplier.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 
 #include "Action.h"
 #include "FollowActions.h"
@@ -429,6 +430,12 @@ float DungeonClearCombatMultiplier::GetValue(Action* action)
 {
     if (!action || !botAI || !bot)
         return 1.0f;
+
+    // Excluding a boss as a primary target does not protect it from splash
+    // damage aimed at nearby trash or the King. Tribute uses single-target
+    // combat throughout, including the tank's rotation.
+    if (DcDireMaulTribute::Enabled(bot) && action->getThreatType() == Action::ActionThreatType::Aoe)
+        return 0.0f;
 
     std::string const& name = action->getName();
 

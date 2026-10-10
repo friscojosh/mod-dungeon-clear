@@ -18,6 +18,7 @@
 #include "Log.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
+#include "ObjectMgr.h"
 #include "Opcodes.h"
 #include "ServerFacade.h"
 #include "Player.h"
@@ -28,6 +29,9 @@
 #include "PlayerbotAI.h"
 
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcStatusPublisher.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
+#include "Ai/Dungeon/DungeonClear/Util/DungeonEventExecutor.h"
 #include "Playerbots.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
@@ -802,6 +806,205 @@ namespace
         return ObjectiveArriveResult::Running;  // the loot-state latch above confirms it
     }
 
+    bool BeginTributeInteraction(Player* bot, uint32 eventId)
+    {
+        using namespace DcDireMaulTribute;
+        PlayerbotAI* ai = GET_PLAYERBOT_AI(bot);
+        if (!ai)
+            return false;
+        DcRunState& run = DcRun::Of(ai);
+        if (run.tributeHoldEvent != eventId)
+        {
+            run.tributeHoldEvent = eventId;
+            DcStatusPublisher::SendAddonMessage(ai, "CHAT\tStay here while " + bot->GetName() +
+                (eventId == TRAP_EVENT ? " repairs Slip'kik's trap." : " distracts Kromcrush."));
+        }
+        float x = 0.0f, y = 0.0f, z = 0.0f;
+        if (!InteractionHoldPoint(eventId, x, y, z))
+            return false;
+        if (Group* group = bot->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    if (member != bot && (!member->IsAlive() || member->IsInCombat() ||
+                        member->GetMap() != bot->GetMap() || member->GetExactDist(x, y, z) > 12.0f))
+                        return false;
+        return true;
+    }
+
+    ObjectiveArriveResult WaitForSlipkik(Player* bot, AiObjectContext* context, DungeonBossInfo const&)
+    {
+        using namespace DcDireMaulTribute;
+        if (!Enabled(bot))
+            return ObjectiveArriveResult::Blocked;
+        Creature* guard = bot->FindNearestCreature(SLIPKIK, 150.0f, true);
+        if (guard && guard->HasAura(ICE_LOCK))
+        {
+            DcRun::Of(context).tributeHoldEvent = 0;
+            return ObjectiveArriveResult::Done;
+        }
+        GameObject* fixed = bot->FindNearestGameObject(FIXED_TRAP, 100.0f);
+        if ((!fixed || !fixed->isSpawned()) &&
+            (!bot->HasItemCount(THORIUM_WIDGET, 1, false) || !bot->HasItemCount(FROST_OIL, 1, false)))
+            return ObjectiveArriveResult::Blocked;
+        if (!BeginTributeInteraction(bot, TRAP_EVENT) || !guard || guard->IsInCombat() || !guard->isMoving())
+            return ObjectiveArriveResult::Running;
+        return IsSlipkikInTrapWindow(guard->GetPositionX(), guard->GetPositionY(), guard->GetPositionZ())
+                   ? ObjectiveArriveResult::Done : ObjectiveArriveResult::Running;
+    }
+
+    ObjectiveArriveResult WaitForFengus(Player* bot, AiObjectContext*, DungeonBossInfo const&)
+    {
+        using namespace DcDireMaulTribute;
+        if (!Enabled(bot))
+            return ObjectiveArriveResult::Blocked;
+        // The whole party must be ready to take the same opening; releasing
+        // only the tank would leave the following players behind the patrol.
+        if (Group* group = bot->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    if (!member->IsAlive() || member->IsInCombat() || !bot->IsWithinDistInMap(member, 25.0f))
+                        return ObjectiveArriveResult::Running;
+        Creature* guard = bot->FindNearestCreature(FENGUS, 250.0f, true);
+        if (!guard || guard->IsInCombat() || !guard->isMoving())
+            return ObjectiveArriveResult::Running;
+        return IsFengusInBypassWindow(guard->GetPositionX(), guard->GetPositionY(), guard->GetPositionZ(),
+                                     guard->GetOrientation())
+                   ? ObjectiveArriveResult::Done : ObjectiveArriveResult::Running;
+    }
+
+    ObjectiveArriveResult DistractKromcrush(Player* bot, AiObjectContext* context,
+                                           DungeonBossInfo const&)
+    {
+        using namespace DcDireMaulTribute;
+        if (!Enabled(bot))
+            return ObjectiveArriveResult::Blocked;
+        Creature* captain = bot->FindNearestCreature(KROMCRUSH, 100.0f, true);
+        if (!captain)
+            return ObjectiveArriveResult::Running;
+        // The native gossip script makes him passive before sending him away.
+        // Observe that transition instead of assuming that sending gossip worked.
+        if (captain->HasReactState(REACT_PASSIVE))
+        {
+            DcRun::Of(context).tributeHoldEvent = 0;
+            return ObjectiveArriveResult::Done;
+        }
+        if (!BeginTributeInteraction(bot, DISGUISE_EVENT))
+            return ObjectiveArriveResult::Running;
+        if (!bot->HasAura(OGRE_DISGUISE))
+        {
+            if (bot->IsNonMeleeSpellCast(false))
+                return ObjectiveArriveResult::Running;
+            Item* suit = bot->GetItemByEntry(OGRE_SUIT);
+            if (!suit)
+                return ObjectiveArriveResult::Blocked;
+            DcFormGate::DropBlockingForm(bot, suit);
+            SpellCastTargets targets;
+            targets.SetUnitTarget(bot);
+            bot->CastItemUseSpell(suit, targets, 0, 0);
+            return ObjectiveArriveResult::Running;
+        }
+        EventStep talk;
+        talk.kind = EventStepKind::Gossip;
+        talk.creatureEntry = KROMCRUSH;
+        talk.gossipOption = 0;
+        talk.radius = 100.0f;
+        DungeonEventProgress progress;
+        DungeonEventExecutor::RunStep(bot, context, talk, progress, getMSTime());
+        return ObjectiveArriveResult::Running;
+    }
+
+    void RetreatFromGordokTrap(Player* bot, AiObjectContext* context)
+    {
+        EventStep retreat;
+        retreat.kind = EventStepKind::MoveTo;
+        DcDireMaulTribute::InteractionHoldPoint(DcDireMaulTribute::TRAP_EVENT, retreat.x, retreat.y, retreat.z);
+        retreat.radius = 4.0f;
+        DungeonEventProgress progress;
+        DungeonEventExecutor::RunStep(bot, context, retreat, progress, getMSTime());
+    }
+
+    ObjectiveArriveResult RepairGordokTrap(Player* bot, AiObjectContext* context, DungeonBossInfo const&)
+    {
+        using namespace DcDireMaulTribute;
+        if (!Enabled(bot))
+            return ObjectiveArriveResult::Blocked;
+        if (Creature* guard = bot->FindNearestCreature(SLIPKIK, 150.0f, true))
+            if (guard->HasAura(ICE_LOCK))
+            {
+                DcRun::Of(context).tributeHoldEvent = 0;
+                return ObjectiveArriveResult::Done;
+            }
+        if (GameObject* trap = bot->FindNearestGameObject(FIXED_TRAP, 100.0f))
+            if (trap->isSpawned())
+            {
+                RetreatFromGordokTrap(bot, context);
+                return ObjectiveArriveResult::Running;
+            }
+
+        GameObject* broken = bot->FindNearestGameObject(BROKEN_TRAP, 20.0f);
+        Quest const* quest = sObjectMgr->GetQuestTemplate(TRAP_QUEST);
+        if (!broken || !broken->isSpawned() || !quest)
+            return ObjectiveArriveResult::Blocked;
+        if (!bot->IsWithinDistInMap(broken, INTERACTION_DISTANCE))
+            return ObjectiveArriveResult::Running;
+
+        // Only the bot's carried supplies are eligible. The native quest checks
+        // and reward transaction consume the widget/oil and fire the trap SAI;
+        // neither supplies nor completion credit are invented by DC.
+        if (bot->GetQuestStatus(TRAP_QUEST) == QUEST_STATUS_NONE)
+        {
+            if (!bot->CanTakeQuest(quest, false) || !bot->CanAddQuest(quest, false))
+                return ObjectiveArriveResult::Blocked;
+            bot->AddQuest(quest, broken);
+        }
+        if (bot->CanCompleteQuest(TRAP_QUEST))
+            bot->CompleteQuest(TRAP_QUEST);
+        if (!bot->CanRewardQuest(quest, 0, false))
+            return ObjectiveArriveResult::Blocked;
+        // RewardQuest alone consumes the items but does not dispatch the GO's
+        // quest-reward AI callback. Use the player turn-in handler so its SAI
+        // both spawns the repaired trap and arms Slip'kik's native patrol.
+        WorldPacket turnIn(CMSG_QUESTGIVER_CHOOSE_REWARD);
+        turnIn << broken->GetGUID() << uint32(TRAP_QUEST) << uint32(0);
+        bot->GetSession()->HandleQuestgiverChooseRewardOpcode(turnIn);
+        // Get out of the guard's aggro radius while his native patrol returns
+        // to the repaired trap. Standing on it would interrupt that patrol.
+        RetreatFromGordokTrap(bot, context);
+        return ObjectiveArriveResult::Running;
+    }
+
+    ObjectiveArriveResult ClaimGordokTribute(Player* bot, AiObjectContext* context,
+                                             DungeonBossInfo const&)
+    {
+        using namespace DcDireMaulTribute;
+        if (!Enabled(bot))
+            return ObjectiveArriveResult::Blocked;
+
+        if (GameObject* chest = bot->FindNearestGameObject(CHEST, 100.0f))
+            if (chest->isSpawned())
+                return IsFullTribute(chest->GetLootMode()) ? ObjectiveArriveResult::Done
+                                                         : ObjectiveArriveResult::Blocked;
+
+        InstanceScript* instance = bot->GetInstanceScript();
+        if (!instance || instance->GetData(NORTH_PROGRESS) != KING_DEFEATED)
+            return ObjectiveArriveResult::Blocked;
+
+        // Mizzle first crowns the new king, then offers the tribute. The core
+        // hides the first option once aura 22799 is present, so the first
+        // visible option is correct on both visits and after a resume. The
+        // shared executor follows the native submenu chain, honours conditions,
+        // and handles approach; no aura, chest or loot is manufactured here.
+        EventStep talk;
+        talk.kind = EventStepKind::Gossip;
+        talk.creatureEntry = MIZZLE;
+        talk.gossipOption = 0;
+        talk.radius = 100.0f;
+        talk.waitForStill = true;
+        DungeonEventProgress progress;
+        DungeonEventExecutor::RunStep(bot, context, talk, progress, getMSTime());
+        return ObjectiveArriveResult::Running;
+    }
+
     // hookId -> behaviour. To give an objective on-arrival behaviour, add a row
     // here and reference its id from a BossRosterRegistry objective (onArriveHook)
     // or a Custom event step (DungeonEventRegistry).
@@ -831,6 +1034,11 @@ namespace
             Reg::AddHook(t, 13, &HadronoxHasWebbedTheDoors);  // Azjol-Nerub — hold until Hadronox webs the doors
             Reg::AddHook(t, 14, &HoldNovosCamp);         // Drak'Tharon Keep — hold the Novos camp through phase 1
             Reg::AddHook(t, DC_HOOK_RAID_MUSTER, &RaidMusterAtObjective);  // generic — raid muster at an objective
+            Reg::AddHook(t, DcDireMaulTribute::CLAIM_HOOK, &ClaimGordokTribute);
+            Reg::AddHook(t, DcDireMaulTribute::DISGUISE_HOOK, &DistractKromcrush);
+            Reg::AddHook(t, DcDireMaulTribute::TRAP_HOOK, &RepairGordokTrap);
+            Reg::AddHook(t, DcDireMaulTribute::FENGUS_HOOK, &WaitForFengus);
+            Reg::AddHook(t, DcDireMaulTribute::SLIPKIK_WAIT_HOOK, &WaitForSlipkik);
 
             // Controllers, one TU each. Called explicitly (not self-registering)
             // because this module is a static lib: a TU whose only output is

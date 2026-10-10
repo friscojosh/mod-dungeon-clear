@@ -6,11 +6,158 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <utility>
+#include <set>
 
 #include "Ai/Dungeon/DungeonClear/Data/DungeonEventRegistry.h"
+#include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
 #include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Overrides/ObjectiveHookRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonEventExecutor.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
+
+TEST(DungeonEventTribute, VariantDoesNotShadowNormalDireMaulEvents)
+{
+    std::vector<DungeonEvent> events;
+    RegisterDireMaulEvents(events);
+    std::set<uint32> ids;
+    for (DungeonEvent const& event : events)
+        EXPECT_TRUE(ids.insert(event.id).second) << "Duplicate Dire Maul event " << event.id;
+    EXPECT_EQ(DungeonEventRegistry::Find(429, 9)->activation, EventActivation::Conditional);
+    EXPECT_EQ(DungeonEventRegistry::Find(429, 10)->activation, EventActivation::Conditional);
+    for (uint32 id = 11; id <= 17; ++id)
+    {
+        DungeonEvent const* event = DungeonEventRegistry::Find(429, id);
+        ASSERT_NE(event, nullptr);
+        ASSERT_EQ(event->steps.size(), 1u);
+        EXPECT_EQ(event->steps.front().kind, EventStepKind::ClearRadius);
+    }
+}
+
+TEST(DungeonEventTribute, ClaimRequiresObservedFullReward)
+{
+    using namespace DcDireMaulTribute;
+    DungeonEvent const* event = DungeonEventRegistry::Find(MAP, CLAIM_EVENT);
+    ASSERT_NE(event, nullptr);
+    ASSERT_EQ(event->steps.size(), 1u);
+    EXPECT_TRUE(event->required);
+    EXPECT_TRUE(event->persistent);
+    EXPECT_EQ(event->steps.front().kind, EventStepKind::Custom);
+    EXPECT_EQ(event->steps.front().hookId, CLAIM_HOOK);
+    EXPECT_TRUE(ObjectiveHookRegistry::Has(CLAIM_HOOK));
+    EXPECT_GT(event->steps.front().timeoutMs, 0u);
+
+    EXPECT_TRUE(IsFullTribute(0x3F));
+    // Native diminished loot modes must never count as a successful full run.
+    for (std::uint16_t mode : {0u, 1u, 3u, 7u, 15u, 31u})
+        EXPECT_FALSE(IsFullTribute(mode));
+}
+
+TEST(DungeonEventTribute, SparedBossesExcludeKingAndOrdinaryTrash)
+{
+    using namespace DcDireMaulTribute;
+    for (std::uint32_t entry : {14326u, 14321u, 14323u, 14325u, 14324u, 14322u})
+        EXPECT_TRUE(IsProtectedEntry(entry));
+    EXPECT_FALSE(IsProtectedEntry(KING));
+    EXPECT_FALSE(IsProtectedEntry(11441)); // Gordok Brute
+    EXPECT_FALSE(IsProtectedEntry(MIZZLE));
+}
+
+TEST(DungeonEventTribute, BypassEventsCannotSkipFailedInteractions)
+{
+    using namespace DcDireMaulTribute;
+    for (auto const& ids : {std::pair{TRAP_EVENT, TRAP_HOOK}, std::pair{DISGUISE_EVENT, DISGUISE_HOOK},
+                            std::pair{FENGUS_EVENT, FENGUS_HOOK}})
+    {
+        DungeonEvent const* event = DungeonEventRegistry::Find(MAP, ids.first);
+        ASSERT_NE(event, nullptr);
+        ASSERT_FALSE(event->steps.empty());
+        EXPECT_TRUE(event->required);
+        EXPECT_TRUE(event->persistent);
+        EXPECT_EQ(event->steps.back().kind, EventStepKind::Custom);
+        EXPECT_EQ(event->steps.back().hookId, ids.second);
+        EXPECT_TRUE(ObjectiveHookRegistry::Has(ids.second));
+        // These interactions use carried supplies through the native item/quest
+        // paths, never the legacy UseItem step which grants missing items.
+        for (EventStep const& step : event->steps)
+            EXPECT_NE(step.kind, EventStepKind::UseItem);
+    }
+}
+
+TEST(DungeonEventTribute, PatrolWindowFollowsWestboundNorthRimPass)
+{
+    using namespace DcDireMaulTribute;
+    EXPECT_TRUE(IsFengusInBypassWindow(435.0f, 338.0f, 2.85f, 3.05f));
+    // Same location on the eastbound pass is about to close our escape route.
+    EXPECT_FALSE(IsFengusInBypassWindow(435.0f, 338.0f, 2.85f, 0.05f));
+    EXPECT_FALSE(IsFengusInBypassWindow(454.448f, 336.781f, 2.85523f, 3.05f));
+    EXPECT_FALSE(IsFengusInBypassWindow(385.505f, 342.491f, 2.86224f, 3.05f));
+    // The old west-courtyard gate let him return while the party fought trash.
+    EXPECT_FALSE(IsFengusInBypassWindow(300.006f, 328.704f, 2.85296f, 3.05f));
+    EXPECT_FALSE(IsFengusInBypassWindow(435.0f, 338.0f, 12.0f, 3.05f));
+}
+
+TEST(DungeonEventTribute, TrapWaitPrecedesApproachAndUsesFarPatrolWindow)
+{
+    using namespace DcDireMaulTribute;
+    DungeonEvent const* event = DungeonEventRegistry::Find(MAP, TRAP_EVENT);
+    ASSERT_NE(event, nullptr);
+    ASSERT_EQ(event->steps.size(), 3u);
+    EXPECT_EQ(event->steps[0].kind, EventStepKind::Custom);
+    EXPECT_EQ(event->steps[0].hookId, SLIPKIK_WAIT_HOOK);
+    EXPECT_TRUE(ObjectiveHookRegistry::Has(SLIPKIK_WAIT_HOOK));
+    EXPECT_EQ(event->steps[1].kind, EventStepKind::MoveTo);
+    EXPECT_EQ(event->steps[2].hookId, TRAP_HOOK);
+    EXPECT_TRUE(IsSlipkikInTrapWindow(486.848f, 606.483f, -25.4048f));
+    EXPECT_FALSE(IsSlipkikInTrapWindow(558.634f, 549.916f, -25.3991f));
+    EXPECT_FALSE(IsSlipkikInTrapWindow(573.506f, 563.22f, -25.4018f));
+    EXPECT_FALSE(IsSlipkikInTrapWindow(486.848f, 606.483f, 29.0f));
+}
+
+TEST(DungeonEventTribute, PartyHoldsAwayFromNativeInteractionTargets)
+{
+    using namespace DcDireMaulTribute;
+    float x = 0.0f, y = 0.0f, z = 0.0f;
+    ASSERT_TRUE(InteractionHoldPoint(TRAP_EVENT, x, y, z));
+    EXPECT_GT(558.806f - x, 40.0f);
+    ASSERT_TRUE(InteractionHoldPoint(DISGUISE_EVENT, x, y, z));
+    EXPECT_GT(627.59f - x, 45.0f);
+    EXPECT_FALSE(InteractionHoldPoint(0, x, y, z));
+    EXPECT_FALSE(InteractionHoldPoint(CLAIM_EVENT, x, y, z));
+}
+
+TEST(DungeonEventTribute, RouteKeepsOnlyKingAndRequiresRewardAfterHisDeath)
+{
+    using namespace DcDireMaulTribute;
+    std::vector<DungeonBossInfo> original;
+    for (std::uint32_t entry : {14326u, 14322u, 14321u, 14323u, 14325u, 14324u, KING})
+    {
+        DungeonBossInfo boss;
+        boss.entry = entry;
+        boss.mapId = MAP;
+        boss.encounterIndex = static_cast<uint32>(original.size());
+        original.push_back(boss);
+    }
+    original.back().encounterIndex = 7;
+    original.back().x = 828.074f;
+    original.back().y = 480.751f;
+    original.back().z = 37.318f;
+    auto const route = BuildRoster(original);
+    ASSERT_EQ(route.size(), 8u);
+    EXPECT_EQ(route[1].eventId, FENGUS_EVENT);
+    EXPECT_EQ(route[4].eventId, TRAP_EVENT);
+    EXPECT_EQ(route[5].eventId, DISGUISE_EVENT);
+    EXPECT_EQ(route[6].entry, KING);
+    EXPECT_EQ(route[6].encounterIndex, 7u); // preserve native kill-bit
+    EXPECT_EQ(route[7].eventId, CLAIM_EVENT);
+    EXPECT_EQ(route[7].kind, DungeonAnchorKind::Objective);
+    EXPECT_GT(route[7].orderOverride, route[6].orderOverride);
+    for (auto const& anchor : route)
+        EXPECT_FALSE(IsProtectedEntry(anchor.entry));
+    EXPECT_EQ(original.size(), 7u); // building a variant leaves the normal list intact
+    original.pop_back();
+    EXPECT_TRUE(BuildRoster(original).empty()); // no fabricated King/completion
+}
 
 namespace
 {

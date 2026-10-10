@@ -63,6 +63,7 @@
 #include "Ai/Dungeon/DungeonClear/Data/ScriptedPullRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTargeting.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTickMemo.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearTuning.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearUtil.h"
@@ -244,6 +245,23 @@ bool DungeonClearFollowTankAction::Execute(Event /*event*/)
             DcFollowerLifecycle::UnmarkFollowing(bot->GetGUID());
         }
         return false;
+    }
+
+    // The tribute interactor must approach alone. This fixed hold replaces
+    // MoveFollow before it can carry an undisguised follower into a guard.
+    float tributeX = 0.0f, tributeY = 0.0f, tributeZ = 0.0f;
+    if (DcDireMaulTribute::FollowerHoldPoint(bot, tributeX, tributeY, tributeZ))
+    {
+        followedTank = tank->GetGUID();
+        DcFollowerLifecycle::MarkFollowing(bot->GetGUID());
+        if (bot->GetExactDist(tributeX, tributeY, tributeZ) <= 4.0f)
+        {
+            DcMovement::StopBot(bot, DcMovement::Stop::Hold);
+            return true;
+        }
+        if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+            DcMovement::StopBot(bot, DcMovement::Stop::Hold);
+        return DcMoveTo(bot->GetMapId(), tributeX, tributeY, tributeZ, false, false, false);
     }
 
     // Leader is dropping down a narrow one-way hole the followers can't path

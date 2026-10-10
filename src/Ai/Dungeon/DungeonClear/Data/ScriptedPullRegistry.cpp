@@ -801,6 +801,24 @@ namespace
             trap.entries = {11448};
             t.push_back(trap);
 
+            // The courtyard swarmers otherwise chain the tank west onto
+            // Fengus's raised patrol lane. Pull them to the cleared east edge
+            // before continuing to the patrol-wait objective. The camp clears
+            // the nearest patrol endpoint (444.092,255.388) by over 50 yards.
+            ScriptedPullStage swarmers;
+            swarmers.mapId = 429;
+            swarmers.bossEntry = BossRosterRegistry::ObjectiveEntry(19);
+            swarmers.order = 1;
+            swarmers.name = "Dire Maul Tribute — east courtyard swarmers";
+            swarmers.campX = 480.0f; swarmers.campY = 220.0f; swarmers.campZ = 2.97152f;
+            swarmers.standX = 476.0f; swarmers.standY = 250.0f; swarmers.standZ = 3.88579f;
+            swarmers.packX = 462.0f; swarmers.packY = 253.0f; swarmers.packZ = 7.0f;
+            swarmers.packRadius = 18.0f;
+            swarmers.packZBand = 6.0f;
+            swarmers.armRadius = 30.0f;
+            swarmers.entries = {13160};
+            t.push_back(swarmers);
+
             std::stable_sort(t.begin(), t.end(),
                              [](ScriptedPullStage const& a, ScriptedPullStage const& b)
                              {

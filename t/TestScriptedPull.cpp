@@ -6,12 +6,14 @@
 #include "gtest/gtest.h"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <utility>
 #include <vector>
 
 #include "Ai/Dungeon/DungeonClear/Data/FightInPlaceRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/ScriptedPullRegistry.h"
+#include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
 
 // The scripted-pull plans on Magisters' Terrace (585): Selin Fireheart's room
 // (orders 0-1) and the Delrissa rotunda (orders 2-6). Molten Core's plan (409, the
@@ -2090,4 +2092,27 @@ TEST(ScriptedPullTribute, TrapWarlocksArePulledFromOutsideAggroAndUpperFloorIsEx
     EXPECT_LT(std::hypot(577.443f - row->standX, 549.148f - row->standY), 30.0f);
     EXPECT_FALSE(ScriptedPullRegistry::InPack(*row, 580.365f, 565.465f, -4.671f));
     EXPECT_FALSE(ScriptedPullRegistry::InPack(*row, 579.373f, 590.731f, -25.319f));
+}
+
+TEST(ScriptedPullTribute, CourtyardSwarmersPullAwayFromFengusPatrol)
+{
+    ScriptedPullStage const* row = ScriptedPullRegistry::Find(429, 1);
+    ASSERT_NE(row, nullptr);
+    EXPECT_EQ(row->bossEntry, BossRosterRegistry::ObjectiveEntry(19));
+    EXPECT_TRUE(ScriptedPullRegistry::InArmRange(*row, 475.0f, 200.0f, 2.97152f));
+    EXPECT_TRUE(ScriptedPullRegistry::IsPackEntry(*row, 13160));
+    EXPECT_FALSE(ScriptedPullRegistry::IsPackEntry(*row, 14321));
+    // The ten native swarmers range from the floor up the courtyard slope.
+    for (auto const& spawn : std::vector<std::array<float, 3>>{
+        {448.102f, 251.626f, 11.2964f}, {448.470f, 258.717f, 11.2989f},
+        {449.768f, 243.479f, 11.2977f}, {452.472f, 260.490f, 11.3032f},
+        {452.721f, 247.395f, 11.3001f}, {455.373f, 253.915f, 11.3039f},
+        {462.602f, 260.845f, 8.90963f}, {462.818f, 251.535f, 8.81738f},
+        {471.895f, 252.937f, 4.96573f}, {477.186f, 250.999f, 2.95125f}})
+    {
+        EXPECT_TRUE(ScriptedPullRegistry::InPack(*row, spawn[0], spawn[1], spawn[2]));
+        EXPECT_LT(std::hypot(spawn[0] - row->standX, spawn[1] - row->standY), 30.0f);
+    }
+    EXPECT_GT(std::hypot(444.092f - row->campX, 255.388f - row->campY), 50.0f);
+    EXPECT_GT(std::hypot(444.092f - row->standX, 255.388f - row->standY), 30.0f);
 }

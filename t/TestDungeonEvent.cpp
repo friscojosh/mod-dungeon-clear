@@ -143,15 +143,20 @@ TEST(DungeonEventTribute, RouteKeepsOnlyKingAndRequiresRewardAfterHisDeath)
     original.back().y = 480.751f;
     original.back().z = 37.318f;
     auto const route = BuildRoster(original);
-    ASSERT_EQ(route.size(), 8u);
+    ASSERT_EQ(route.size(), 10u);
     EXPECT_EQ(route[1].eventId, FENGUS_EVENT);
-    EXPECT_EQ(route[4].eventId, TRAP_EVENT);
-    EXPECT_EQ(route[5].eventId, DISGUISE_EVENT);
-    EXPECT_EQ(route[6].entry, KING);
-    EXPECT_EQ(route[6].encounterIndex, 7u); // preserve native kill-bit
-    EXPECT_EQ(route[7].eventId, CLAIM_EVENT);
-    EXPECT_EQ(route[7].kind, DungeonAnchorKind::Objective);
-    EXPECT_GT(route[7].orderOverride, route[6].orderOverride);
+    EXPECT_EQ(route[4].eventId, TRAP_CLEAR_WAIT_EVENT);
+    EXPECT_EQ(route[5].onArriveHook, TRAP_CLEAR_HOOK);
+    EXPECT_EQ(route[5].gateEntry, 0u);
+    EXPECT_EQ(route[5].eventId, 0u); // pull controller must own this step
+    EXPECT_TRUE(ObjectiveHookRegistry::Has(TRAP_CLEAR_HOOK));
+    EXPECT_EQ(route[6].eventId, TRAP_EVENT);
+    EXPECT_EQ(route[7].eventId, DISGUISE_EVENT);
+    EXPECT_EQ(route[8].entry, KING);
+    EXPECT_EQ(route[8].encounterIndex, 7u); // preserve native kill-bit
+    EXPECT_EQ(route[9].eventId, CLAIM_EVENT);
+    EXPECT_EQ(route[9].kind, DungeonAnchorKind::Objective);
+    EXPECT_GT(route[9].orderOverride, route[8].orderOverride);
     for (auto const& anchor : route)
         EXPECT_FALSE(IsProtectedEntry(anchor.entry));
     EXPECT_EQ(original.size(), 7u); // building a variant leaves the normal list intact

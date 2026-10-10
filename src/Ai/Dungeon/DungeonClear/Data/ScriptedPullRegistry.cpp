@@ -16,6 +16,7 @@
 #include "Ai/Dungeon/DungeonClear/DcPullContext.h"
 #include "Ai/Dungeon/DungeonClear/DcValueKeys.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
+#include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTargeting.h"
 #include "Playerbots.h"
 
@@ -778,6 +779,24 @@ namespace
                 s.entries    = cavern;
                 t.push_back(s);
             }
+
+            // Dire Maul Tribute: a preceding patrol-wait objective opens the
+            // tag window. Pull the ground-floor warlocks off the broken trap,
+            // then wait for another opening before repairing it. The upper
+            // gallery and Slip'kik are excluded by floor and entry respectively.
+            ScriptedPullStage trap;
+            trap.mapId = 429;
+            trap.bossEntry = BossRosterRegistry::ObjectiveEntry(23);
+            trap.order = 0;
+            trap.name = "Dire Maul Tribute — trap warlocks";
+            trap.campX = 515.0f; trap.campY = 535.0f; trap.campZ = -25.2951f;
+            trap.standX = 554.0f; trap.standY = 533.0f; trap.standZ = -25.4f;
+            trap.packX = 581.0f; trap.packY = 547.0f; trap.packZ = -25.4f;
+            trap.packRadius = 12.0f;
+            trap.packZBand = 6.0f;
+            trap.armRadius = 20.0f;
+            trap.entries = {11448};
+            t.push_back(trap);
 
             std::stable_sort(t.begin(), t.end(),
                              [](ScriptedPullStage const& a, ScriptedPullStage const& b)

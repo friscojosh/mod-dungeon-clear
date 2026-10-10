@@ -8,7 +8,6 @@
 #include "Ai/Dungeon/DungeonClear/Data/DungeonWingRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Settings/DcSettings.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
-#include "Ai/Dungeon/DungeonClear/Util/DcLeaderSignal.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRunWing.h"
 #include "Ai/Dungeon/DungeonClear/Data/BossSpawnIndex.h"
@@ -81,6 +80,7 @@ std::string DcDireMaulTribute::BlockedReason(Player* bot, std::uint32_t eventId)
     {
         case FENGUS_EVENT:
             return "The party could not cross while Fengus was safely away. Gather on the east side of the courtyard.";
+        case TRAP_CLEAR_WAIT_EVENT:
         case TRAP_EVENT:
         {
             std::string missing;
@@ -236,6 +236,12 @@ std::vector<DungeonBossInfo> DcDireMaulTribute::BuildRoster(std::vector<DungeonB
                                   480.0f, 335.0f, 2.97152f, 4.0f, 0, 0, 0, 30));
     route.push_back(MakeObjective(OBJ(21), 70, MAP, "Leave Fengus's courtyard",
                                   385.0f, 375.0f, -0.940978f, 4.0f, 0, 0, 0, 40));
+    route.push_back(MakeObjective(OBJ(22), 71, MAP, "Wait to pull the trap guards",
+                                  515.0f, 535.0f, -25.2951f, 5.0f, 0, 0, TRAP_CLEAR_WAIT_EVENT, 50));
+    // No persistent event here: the existing scripted pull controller owns the
+    // tank until the two warlocks have been brought back to this safe camp.
+    route.push_back(MakeObjective(OBJ(23), 72, MAP, "Clear the trap approach",
+                                  515.0f, 535.0f, -25.2951f, 5.0f, 0, TRAP_CLEAR_HOOK, 0, 60));
     route.push_back(MakeObjective(OBJ(15), 64, MAP, "Repair Slip'kik's trap",
                                   515.0f, 535.0f, -25.2951f, 5.0f, 0, 0, TRAP_EVENT, 70));
     // Stop short of the Captain to put the disguise on before approaching him.
@@ -291,6 +297,12 @@ void RegisterDireMaulEvents(std::vector<DungeonEvent>& out)
     out.push_back(EventBuilder(429, DcDireMaulTribute::FENGUS_EVENT, "Wait for Fengus's patrol")
                       .Anchored(20)
                       .Custom(DcDireMaulTribute::FENGUS_HOOK).Timeout(600000)
+                      .Persistent()
+                      .Build());
+
+    out.push_back(EventBuilder(429, DcDireMaulTribute::TRAP_CLEAR_WAIT_EVENT, "Wait before pulling the trap guards")
+                      .Anchored(50)
+                      .Custom(DcDireMaulTribute::SLIPKIK_WAIT_HOOK).Timeout(600000)
                       .Persistent()
                       .Build());
 

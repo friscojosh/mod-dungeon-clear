@@ -2072,3 +2072,22 @@ TEST(DcScriptedPullTest, MoltenCoreCampIsOutOfEveryPacksReachAndArmsFromTheAncho
         EXPECT_FLOAT_EQ(s->armRadius, rows[0]->armRadius) << "stage " << s->order;
     }
 }
+
+TEST(ScriptedPullTribute, TrapWarlocksArePulledFromOutsideAggroAndUpperFloorIsExcluded)
+{
+    ScriptedPullStage const* row = ScriptedPullRegistry::Find(429, 0);
+    ASSERT_NE(row, nullptr);
+    EXPECT_FALSE(row->bodyPull);
+    EXPECT_TRUE(ScriptedPullRegistry::IsPackEntry(*row, 11448));
+    EXPECT_FALSE(ScriptedPullRegistry::IsPackEntry(*row, 14323));
+    for (auto const& spawn : {std::pair<float, float>{577.443f, 549.148f}, {584.833f, 544.572f}})
+    {
+        EXPECT_TRUE(ScriptedPullRegistry::InPack(*row, spawn.first, spawn.second, -25.315f));
+        EXPECT_GT(std::hypot(spawn.first - row->campX, spawn.second - row->campY), 40.0f);
+        EXPECT_GT(std::hypot(spawn.first - row->standX, spawn.second - row->standY), 23.0f);
+    }
+    // The nearest warlock is within a standard 30-yard ranged opener.
+    EXPECT_LT(std::hypot(577.443f - row->standX, 549.148f - row->standY), 30.0f);
+    EXPECT_FALSE(ScriptedPullRegistry::InPack(*row, 580.365f, 565.465f, -4.671f));
+    EXPECT_FALSE(ScriptedPullRegistry::InPack(*row, 579.373f, 590.731f, -25.319f));
+}

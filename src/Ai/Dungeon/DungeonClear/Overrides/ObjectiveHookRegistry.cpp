@@ -41,6 +41,7 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcPlayerbotCompat.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRaidMuster.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTargeting.h"
+#include "Ai/Dungeon/DungeonClear/Data/ScriptedPullRegistry.h"
 
 namespace
 {
@@ -852,6 +853,21 @@ namespace
                    ? ObjectiveArriveResult::Done : ObjectiveArriveResult::Running;
     }
 
+    ObjectiveArriveResult TrapApproachCleared(Player* bot, AiObjectContext* context, DungeonBossInfo const&)
+    {
+        using namespace DcDireMaulTribute;
+        if (!Enabled(bot))
+            return ObjectiveArriveResult::Blocked;
+        ScriptedPullStage const* stage = ScriptedPullRegistry::Find(MAP, 0);
+        if (!stage)
+            return ObjectiveArriveResult::Blocked;
+        // Do not apply the pull controller's abort-target exclusion here: an
+        // abandoned pull is not evidence that its living warlock is dead.
+        Unit* remaining = DcTargeting::NearestHostileNearPoint(bot, context,
+            stage->packX, stage->packY, stage->packZ, stage->packRadius, stage->packZBand, &stage->entries);
+        return remaining ? ObjectiveArriveResult::Running : ObjectiveArriveResult::Done;
+    }
+
     ObjectiveArriveResult WaitForFengus(Player* bot, AiObjectContext*, DungeonBossInfo const&)
     {
         using namespace DcDireMaulTribute;
@@ -1039,6 +1055,7 @@ namespace
             Reg::AddHook(t, DcDireMaulTribute::TRAP_HOOK, &RepairGordokTrap);
             Reg::AddHook(t, DcDireMaulTribute::FENGUS_HOOK, &WaitForFengus);
             Reg::AddHook(t, DcDireMaulTribute::SLIPKIK_WAIT_HOOK, &WaitForSlipkik);
+            Reg::AddHook(t, DcDireMaulTribute::TRAP_CLEAR_HOOK, &TrapApproachCleared);
 
             // Controllers, one TU each. Called explicitly (not self-registering)
             // because this module is a static lib: a TU whose only output is

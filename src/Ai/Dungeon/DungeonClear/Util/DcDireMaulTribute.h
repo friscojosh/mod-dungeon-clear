@@ -26,6 +26,8 @@ namespace DcDireMaulTribute
     constexpr std::uint32_t DISGUISE_EVENT = 19;
     constexpr std::uint32_t TRAP_EVENT = 20;
     constexpr std::uint32_t FENGUS_EVENT = 21;
+    constexpr std::uint32_t TRAP_CLEAR_WAIT_EVENT = 22;
+    constexpr std::uint32_t TRAP_CLEAR_HOOK = 49;
     constexpr std::uint32_t FENGUS_HOOK = 47;
     constexpr std::uint32_t SLIPKIK_WAIT_HOOK = 48;
     constexpr std::uint32_t FENGUS = 14321;

@@ -93,7 +93,13 @@ session with a dirty tree. They are reminders, not a substitute for the rules.
 
 ## Build & test
 The user always builds and deploys — do not build or inspect the binary.
-Run the gtest suite from this module root: `sudo bash t/run_tests.sh`.
+Run the gtest suite from this module root: `bash t/run_tests.sh` (never sudo).
+The runner configures and builds the test target in this module's `build/tests/`,
+separate from the server build, and does not install or deploy anything.
+Use `DC_TEST_BUILD_DIR` to select another user-owned test build directory;
+additional arguments are passed to CMake (for example, `-DBoost_ROOT=...`).
+Missing development dependencies must be installed separately, not by running
+the test suite as root.
 Plan / design / review docs live in `deployment-files/docs/`, never committed
 to this repo.
 

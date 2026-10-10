@@ -1,10 +1,25 @@
 #!/bin/bash
-set -e
+set -euo pipefail
+
+if (( EUID == 0 )); then
+  echo "Run this script as your normal user, without sudo." >&2
+  exit 1
+fi
 
 # Find repo root relative to the script location
 SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 REPO_ROOT="$( cd "${SCRIPT_DIR}/../../.." && pwd )"
-BUILD_DIR="${REPO_ROOT}/build"
+# Keep test configuration separate from the server build. Override explicitly
+# to reuse another user-owned test build directory.
+BUILD_DIR="${DC_TEST_BUILD_DIR:-${SCRIPT_DIR}/../build/tests}"
+mkdir -p "${BUILD_DIR}"
+BUILD_DIR="$( cd "${BUILD_DIR}" && pwd )"
+
+if [[ ! -w "${BUILD_DIR}" ]]; then
+  echo "Test build directory is not writable: ${BUILD_DIR}" >&2
+  echo "Set DC_TEST_BUILD_DIR to a directory owned by your user; do not use sudo." >&2
+  exit 1
+fi
 
 echo "=========================================================="
 echo " Dungeon Clear Test Runner"
@@ -15,12 +30,11 @@ echo "----------------------------------------------------------"
 
 # Configure with unit testing enabled
 echo "Configuring build system with BUILD_TESTING=ON..."
-cd "${REPO_ROOT}"
-cmake -B build -DBUILD_TESTING=ON
+cmake -S "${REPO_ROOT}" -B "${BUILD_DIR}" -DBUILD_TESTING=ON "$@"
 
 # Compile the dungeon_clear_tests target specifically
 echo "Building dungeon_clear_tests target..."
-cmake --build build --target dungeon_clear_tests -j$(nproc)
+cmake --build "${BUILD_DIR}" --target dungeon_clear_tests -j"$(nproc)"
 
 # Run the DungeonClear test cases. The binary is the module's standalone suite,
 # so this covers the DungeonClear* fixtures plus the Dc* suites (the approach

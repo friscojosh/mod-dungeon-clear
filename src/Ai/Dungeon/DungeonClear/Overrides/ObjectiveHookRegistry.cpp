@@ -36,6 +36,7 @@
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
 #include "Ai/Dungeon/DungeonClear/DcValueKeys.h"
+#include "Ai/Dungeon/DungeonClear/DcPullContext.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcFormGate.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcMovement.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcPlayerbotCompat.h"
@@ -861,6 +862,17 @@ namespace
         ScriptedPullStage const* stage = ScriptedPullRegistry::Find(MAP, 0);
         if (!stage)
             return ObjectiveArriveResult::Blocked;
+        // Dragging the warlocks out of their spawn volume is not a clear.
+        // Keep this objective until the maneuver and the actual fight end;
+        // an evaded pack must be checked back at its spawn before advancing.
+        DcPullContext const& pull = context->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
+        if (pull.phase != DcPullPhase::Idle || bot->IsInCombat())
+            return ObjectiveArriveResult::Running;
+        if (Group* group = bot->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource())
+                    if (member->GetMap() == bot->GetMap() && member->IsInCombat())
+                        return ObjectiveArriveResult::Running;
         // Do not apply the pull controller's abort-target exclusion here: an
         // abandoned pull is not evidence that its living warlock is dead.
         Unit* remaining = DcTargeting::NearestHostileNearPoint(bot, context,

@@ -39,10 +39,10 @@ public:
     // The upstream-shaped core moved this onto WorldSession (DcCoreCompat.h).
     MOCK_METHOD(SQLQueryHolderCallback&, AddQueryHolderCallback, (SQLQueryHolderCallback&& callback), (override));
 #endif
-    // GetPlayerbotsDBRevision is gone: the core stopped carrying a playerbots
-    // database (core PR #253, 2026-09-18). mod-playerbots now opens its own via
-    // the generic OnModuleDatabasesLoading hook and reports its revision through
-    // OnDatabaseGetDBRevision, so IWorld no longer declares anything to override.
+#ifdef DC_CORE_IWORLD_HAS_PLAYERBOTS_REVISION
+    // Older cores still require this; newer cores report module revisions through a hook.
+    MOCK_METHOD(char const*, GetPlayerbotsDBRevision, (), (const, override));
+#endif
 };
 
 class DungeonClearTestBase : public ::testing::Test

@@ -12,6 +12,42 @@
 
 #include "Ai/Dungeon/DungeonClear/Data/FightInPlaceRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/ScriptedPullRegistry.h"
+#include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
+
+TEST(DcScriptedPullTest, PatrolLeavingViewAndPartialKillsDoNotUnlockTheNextPack)
+{
+    using State = ScriptedPatrolMemberState;
+    EXPECT_FALSE(ScriptedPullRegistry::PatrolCleared({State::Alive, State::Alive, State::Alive}));
+    // The same pack walks out of the loaded area. It has not been killed.
+    EXPECT_FALSE(ScriptedPullRegistry::PatrolCleared({State::Unknown, State::Unknown, State::Unknown}));
+    EXPECT_FALSE(ScriptedPullRegistry::PatrolCleared({}));
+    // Killing the leader alone must not strand a mastiff behind the party.
+    EXPECT_FALSE(ScriptedPullRegistry::PatrolCleared({State::Dead, State::Alive, State::Dead}));
+    EXPECT_FALSE(ScriptedPullRegistry::PatrolCleared({State::Dead, State::Unknown, State::Dead}));
+    EXPECT_TRUE(ScriptedPullRegistry::PatrolCleared({State::Dead, State::Dead, State::Dead}));
+}
+
+TEST(DcScriptedPullTest, DireMaulEntrancePatrolUsesTheWholeFormationRatherThanARadius)
+{
+    ScriptedPullStage const* stage = ScriptedPullRegistry::Find(429, 0);
+    ASSERT_NE(stage, nullptr);
+    EXPECT_EQ(stage->bossEntry, BossRosterRegistry::ObjectiveEntry(15));
+    EXPECT_TRUE(stage->IsPatrol());
+    // creature_formations leader 247708: one Brute and both mastiffs. Other
+    // Brutes/mastiffs in this courtyard must never satisfy this prerequisite.
+    EXPECT_EQ(stage->spawnIds, (std::vector<uint32>{247708, 248166, 248167}));
+    EXPECT_FALSE(stage->bodyPull);
+    EXPECT_FALSE(ScriptedPullRegistry::InArmRange(*stage, 255.25f, -16.06f, -2.59f));
+    EXPECT_TRUE(ScriptedPullRegistry::InArmRange(*stage, stage->standX, stage->standY, stage->standZ));
+
+    // Path 2477080: its far end is outside the ordinary 35yd look-ahead, but
+    // the western turn brings it into body-aggro range at the intercept.
+    EXPECT_GT(std::hypot(472.197f - stage->standX, 53.2145f - stage->standY), 150.0f);
+    EXPECT_LT(std::hypot(290.928f - stage->standX, 96.81f - stage->standY), 12.0f);
+    EXPECT_GT(std::hypot(290.928f - stage->campX, 96.81f - stage->campY), 40.0f);
+    // A run on the lower floor by Mol'dar must not arm this upper-rim stop.
+    EXPECT_FALSE(ScriptedPullRegistry::InArmRange(*stage, stage->standX, stage->standY, -25.0f));
+}
 
 // The scripted-pull plans on Magisters' Terrace (585): Selin Fireheart's room
 // (orders 0-1) and the Delrissa rotunda (orders 2-6).

@@ -494,6 +494,12 @@ bool DungeonClearAtObjectiveTrigger::IsActive()
     if (!next.has_value() || next->kind != DungeonAnchorKind::Objective)
         return false;
 
+    // A patrol prerequisite cannot be completed by merely reaching its stand.
+    // This also holds during rest/muster and when the patrol is unloaded.
+    if (ScriptedPullStage const* stage = DcTickMemoAccess::ScriptedStage(bot, context))
+        if (stage->IsPatrol())
+            return false;
+
     // Sticky for a PERSISTENT event already in progress: once started, stay live
     // regardless of distance so the tank can roam far from the anchor while the
     // event drives it (down ZulFarrak's stairs to the temple bosses, back to the
@@ -1325,7 +1331,8 @@ bool DungeonClearPullTrigger::IsActive()
     // a PULL-BACK boss: the pull pipeline is the ONLY thing that may engage him,
     // because the walk-in engage would go to where he stands — which for Ghaz'an is
     // the middle of a lake.
-    if (DcTickMemoAccess::AtBossEngage(bot, context, *next) &&
+    if (next->kind == DungeonAnchorKind::Boss &&
+        DcTickMemoAccess::AtBossEngage(bot, context, *next) &&
         !DcTargeting::IsRoomClearActive(bot, context) && !pullback)
         return false;
     if (!IsBetweenPullsReady(bot, context))
@@ -1343,7 +1350,10 @@ bool DungeonClearPullTrigger::IsActive()
 
     Unit* trash = DcTargeting::GetPullTarget(botAI);
     if (!trash)
-        return false;
+    {
+        ScriptedPullStage const* stage = DcTickMemoAccess::ScriptedStage(bot, context);
+        return stage && stage->IsPatrol();
+    }
 
     // Fight-in-place room: some bosses gate their OWN aggro on the party being inside
     // their room (Selin Fireheart's CanAIAttack requires X > 216). Advanced-pulling

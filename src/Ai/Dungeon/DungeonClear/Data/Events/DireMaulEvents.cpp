@@ -436,6 +436,14 @@ void RegisterDireMaulRoster(std::vector<BossRosterPatch>& t)
             { 11486, 50 },  // Prince Tortheldrin (last)
         };
         p.add = {
+            // Clear the approach, then hold for the Brute/mastiff patrol before
+            // descending into Mol'dar's courtyard. The scripted pull owns this
+            // waypoint until every member is confirmed dead, even out of range.
+            MakeObjective(OBJ(15), /*encounterIndex*/ 54, 429,
+                          "Clear the entrance courtyard patrol",
+                          285.0f, 90.0f, -3.0f,
+                          /*arriveRadius*/ 8.0f, 0, /*hook*/ 0,
+                          /*eventId*/ 0, /*orderOverride*/ 0),
             // East — Ironbark / Conservatory Door.
             MakeObjective(OBJ(1), /*encounterIndex*/ 40, 429,
                           "Ironbark the Redeemed (Conservatory Door)",
@@ -595,6 +603,7 @@ void RegisterDireMaulWings(std::unordered_map<uint32, DungeonWingLayout>& store)
             BossRosterRegistry::ObjectiveEntry(14),  // approach (E)
         }, "dm-west"},
         {"Dire Maul (North)", {
+            BossRosterRegistry::ObjectiveEntry(15),
             14326,  // Guard Mol'dar
             14322,  // Stomper Kreeg
             14321,  // Guard Fengus

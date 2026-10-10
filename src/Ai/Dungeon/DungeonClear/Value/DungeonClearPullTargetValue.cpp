@@ -34,8 +34,12 @@ ObjectGuid DungeonClearPullTargetValue::Calculate()
     // advance camp-trail gate all aimed at the OTHER pack, which is the same class
     // of split-brain that made the earlier attempts at this room thrash.
     if (ScriptedPullStage const* stage = DcTickMemoAccess::ScriptedStage(bot, context))
+    {
         if (Unit* member = ScriptedPullRegistry::NearestPackMember(bot, context, *stage))
             return member->GetGUID();
+        if (stage->IsPatrol())
+            return ObjectGuid::Empty;
+    }
 
     // Sticky fast path: the governor's per-pack latch IS the target while it
     // still resolves to a valid pull. Deliberately does NOT require it to still

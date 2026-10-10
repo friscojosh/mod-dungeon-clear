@@ -15,6 +15,13 @@ class Player;
 class Unit;
 class AiObjectContext;
 
+enum class ScriptedPatrolMemberState
+{
+    Unknown,
+    Alive,
+    Dead
+};
+
 // Static registry of SCRIPTED PULL STAGES: hand-authored "peel this pack out of
 // that room, in this order, from this exact spot" plans.
 //
@@ -111,6 +118,11 @@ struct ScriptedPullStage
     // The stage only arms while this boss is the run's next objective, so the
     // plan can never fire on the way past the room after the boss is dead.
     uint32 bossEntry{0};
+    // A required roaming pack is identified by spawn, not by its current volume.
+    // Missing/unloaded members remain pending; only death/respawn evidence clears
+    // them. These rows wait at the stand spot and never fall back to a chase.
+    std::vector<uint32> spawnIds;
+    bool IsPatrol() const { return !spawnIds.empty(); }
     // Pull sequence within the map, ascending. Stage N+1 only arms once stage N's
     // volume holds no live pack member — i.e. once that pack has been peeled out
     // and killed. Must be unique per map (it is the stage's identity: the in-flight
@@ -723,6 +735,9 @@ public:
     static bool InPack(ScriptedPullStage const& s, float x, float y, float z);
     // Is `entry` one of the stage's pack members?
     static bool IsPackEntry(ScriptedPullStage const& s, uint32 entry);
+    // Missing/out-of-range is Unknown, never Dead. All members must be accounted
+    // for; an empty observation is not evidence that the patrol was cleared.
+    static bool PatrolCleared(std::vector<ScriptedPatrolMemberState> const& members);
     // Is a bot at (x,y,z) close enough to the arm anchor for the stage to arm?
     static bool InArmRange(ScriptedPullStage const& s, float x, float y, float z);
     // Which stage should run? `orders`/`live` are parallel and ascending: `live[i]`
@@ -740,7 +755,8 @@ public:
 
     // --- live resolution --------------------------------------------------
     // The stage the pull pipeline should be running right now, or nullptr. Applies
-    // the boss gate, the arm gate, the in-flight pin and SelectOrder.
+    // the boss gate, the arm gate, the in-flight pin and SelectOrder. Required
+    // patrols latch on first arrival and remain due back at camp until all die.
     //
     // UNCACHED and not cheap — it runs one entry-filtered volume scan per candidate
     // stage. Everything on the per-tick path goes through
@@ -749,6 +765,7 @@ public:
     // Nearest live, reachable pack member of `s` — the pull target for the stage.
     static Unit* NearestPackMember(Player* bot, AiObjectContext* ctx,
                                    ScriptedPullStage const& s);
+    static bool PatrolPending(Player* bot, ScriptedPullStage const& s);
 };
 
 #endif  // _PLAYERBOT_SCRIPTEDPULLREGISTRY_H

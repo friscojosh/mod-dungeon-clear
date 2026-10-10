@@ -460,6 +460,11 @@ struct DcPullContext
                nowMs - scoutAggroMs < windowMs;
     }
 
+    // Unlike scriptedStage, this survives the end of one camp fight: killing
+    // just one patrol member must not drop its prerequisite while back at camp.
+    int32 requiredPatrolStage = -1;
+    uint32 scriptedPatrolWaitSince = 0; // bounded wait for a required roaming pack
+
     void Reset() { *this = DcPullContext{}; }
 
     // Tear down the standing Dynamic verdict and every latch that feeds it.

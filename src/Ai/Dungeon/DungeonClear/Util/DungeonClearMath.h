@@ -721,6 +721,21 @@ namespace DungeonClearMath
         return now >= sinceMs && (now - sinceMs) >= timeoutMs;
     }
 
+    // A formation timeout is a failed readiness check, never permission to tag.
+    enum class PullFormationVerdict
+    {
+        Wait,
+        Tag,
+        Pause
+    };
+
+    inline PullFormationVerdict DecidePullFormation(bool partySet, bool timedOut)
+    {
+        if (partySet)
+            return PullFormationVerdict::Tag;
+        return timedOut ? PullFormationVerdict::Pause : PullFormationVerdict::Wait;
+    }
+
     // Flagged-in-combat driving gate (pure, streak clock by reference).
     //
     // THE DISTINCTION: `flagged` is the core combat FLAG (Unit::IsInCombat);
@@ -755,15 +770,15 @@ namespace DungeonClearMath
     inline bool MayDriveWhileFlagged(bool flagged, bool engaged, std::uint32_t now,
                                      std::uint32_t graceMs, std::uint32_t& sinceMs)
     {
-        if (!flagged)
-        {
-            sinceMs = 0;
-            return true;            // not in combat at all — the ordinary case
-        }
         if (engaged)
         {
             sinceMs = 0;
             return false;           // a real fight owns the bot; stay out of it
+        }
+        if (!flagged)
+        {
+            sinceMs = 0;
+            return true;            // neither the tank nor its party is fighting
         }
         if (graceMs == 0)
             return true;

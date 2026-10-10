@@ -373,6 +373,10 @@ bool DcPartyState::IsBetweenPullsReady(Player* bot, AiObjectContext* context, bo
 {
     if (!bot || !context)
         return false;
+    // The tank's combat flag can clear before a follower's last enemy dies.
+    // Health/mana and proximity alone must never authorize another pack then.
+    if (DcCombatFlag::AnyPartyEngagement(bot))
+        return false;
     // Post-combat rez recovery: a dead same-map member holds the tank outright.
     // Placed AHEAD of the Smart Rest branch split so it binds in BOTH branches
     // (Smart Rest is off by default) — with the party-died bailout relaxed,

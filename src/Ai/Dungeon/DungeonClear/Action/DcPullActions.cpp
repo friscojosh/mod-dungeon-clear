@@ -51,6 +51,8 @@
 #include "Ai/Dungeon/DungeonClear/Util/NavmeshSnap.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcPathWorker.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTankForm.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcCombatFlag.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcSocialQuarantine.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTargeting.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTickMemo.h"
@@ -167,6 +169,16 @@ namespace
         pull.scriptedRecallBest = 0.0f;
         pull.scriptedEngageHp = -1.0f;
         pull.scriptedEngageSince = 0;
+    }
+
+    void PauseUnsafePull(Player* bot, AiObjectContext* context, char const* reason)
+    {
+        DcRunState& run = DcRun::Of(context);
+        run.paused = true;
+        run.pauseReason = reason;
+        DcMovement::StopBot(bot, DcMovement::Stop::HardPin);
+        DcMovement::ClearMovementWait(bot);
+        DC_PULL_INFO("[DC:{}] {}", bot->GetName(), run.pauseReason);
     }
 
     // Is the stage this pull is executing authored as a BODY pull — walk in and take
@@ -649,6 +661,8 @@ namespace
 
 bool DungeonClearPullAction::Execute(Event /*event*/)
 {
+    if (DcRun::Of(context).paused)
+        return false;
     DcPullContext& pull = context->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
     Position& camp = pull.camp;
     uint32 const since = pull.phaseSince;
@@ -657,6 +671,45 @@ bool DungeonClearPullAction::Execute(Event /*event*/)
     DcLatchRoomCampFight(bot, context, pull);
 
     std::optional<DungeonBossInfo> next = AI_VALUE(std::optional<DungeonBossInfo>, DcKey::NextDungeonBoss);
+
+    // Recheck at execution as well as in the trigger: a follower may have been
+    // attacked after this action was queued. Finish that fight before a new pull.
+    if (phase == DcPullPhase::Idle && DcCombatFlag::AnyPartyEngagement(bot))
+        return false;
+
+    ScriptedPullStage const* const stage = DcTickMemoAccess::ScriptedStage(bot, context);
+    bool const patrol = stage && stage->IsPatrol();
+    if (patrol && (phase == DcPullPhase::Idle || phase == DcPullPhase::Forming ||
+                   phase == DcPullPhase::Advancing))
+    {
+        if (!ScriptedPullRegistry::PatrolPending(bot, *stage))
+        {
+            AbandonScriptedStage(pull);
+            pull.scriptedPatrolWaitSince = 0;
+            DcSetPullPhase(context, DcPullPhase::Idle);
+            return false;
+        }
+        if (!pull.scriptedPatrolWaitSince)
+            pull.scriptedPatrolWaitSince = now ? now : 1;
+        // The recorded circuit is long. Allow a full lap plus formation/rest
+        // time, then pause visibly rather than converting a missed patrol into
+        // permission to charge through the remaining packs.
+        if (getMSTimeDiff(pull.scriptedPatrolWaitSince, now) >= 360000)
+        {
+            pull.scriptedPatrolWaitSince = 0;
+            PauseUnsafePull(bot, context, "courtyard patrol did not return; check the pack and resume");
+            return true;
+        }
+        if (!DcTargeting::GetPullTarget(botAI))
+        {
+            pull.PublishCamp(Position(stage->campX, stage->campY, stage->campZ), now);
+            DcMovement::StopBot(bot, DcMovement::Stop::HardPin);
+            DcMovement::ClearMovementWait(bot);
+            return true;
+        }
+    }
+    else
+        pull.scriptedPatrolWaitSince = 0;
 
     // SOCIAL QUARANTINE upkeep. The advance rung does the same thing, and between
     // them the leader re-asserts it in every state it can be in outside a boss
@@ -1137,7 +1190,16 @@ bool DungeonClearPullAction::Execute(Event /*event*/)
             bool const partySet =
                 DcPullPlanner::IsPartySetAtCamp(bot, camp, DC_PULL_SET_RADIUS);
             bool const formingTimedOut = (now - since) > setTimeoutMs;
-            if (!partySet && !formingTimedOut)
+            auto const formation = DungeonClearMath::DecidePullFormation(partySet, formingTimedOut);
+            if (formation == DungeonClearMath::PullFormationVerdict::Pause)
+            {
+                // Resume gets a fresh gathering budget. Never launch the tank
+                // just because a healer or another follower failed to reach camp.
+                DcSetPullPhase(context, DcPullPhase::Forming);
+                PauseUnsafePull(bot, context, "party has not reached pull camp; regroup and resume");
+                return true;
+            }
+            if (formation == DungeonClearMath::PullFormationVerdict::Wait)
             {
                 DC_PULL_TRACE("[DC:{}] pull forming: waiting for party to set at camp "
                               "({}/{} ms)", bot->GetName(), now - since, setTimeoutMs);
@@ -1157,9 +1219,7 @@ bool DungeonClearPullAction::Execute(Event /*event*/)
             }
 
             DcSetPullPhase(context, DcPullPhase::Advancing);
-            DC_PULL_DEBUG("[DC:{}] pull forming complete ({}) -> advancing (tag)",
-                          bot->GetName(),
-                          partySet ? "party set" : "timed out waiting for party");
+            DC_PULL_DEBUG("[DC:{}] pull forming complete (party set) -> advancing (tag)", bot->GetName());
             return true;
         }
 
@@ -1183,7 +1243,7 @@ bool DungeonClearPullAction::Execute(Event /*event*/)
 
             // Tag-leg budget: the camp-to-target span, so a pull-back's long haul
             // out to the boss gets a proportionate watchdog (see DcPullLegTimeoutMs).
-            if ((now - since) > DcPullLegTimeoutMs(pull, camp.GetExactDist(trash)))
+            if (!patrol && (now - since) > DcPullLegTimeoutMs(pull, camp.GetExactDist(trash)))
             {
                 // Stalled without aggro (e.g. the tag resisted and we never closed).
                 // Hand this pack to the normal walk-in engage so the run never hangs —
@@ -1262,6 +1322,11 @@ bool DungeonClearPullAction::Execute(Event /*event*/)
                         if (walked || bot->isMoving() ||
                             IsWaitingForLastMove(MovementPriority::MOVEMENT_COMBAT))
                             return true;
+                        if (patrol)
+                        {
+                            DcMovement::StopBot(bot, DcMovement::Stop::HardPin);
+                            return true; // bounded above; never tag from an unplanned spot
+                        }
                         // Couldn't move and not moving: the stand spot is wedged. Fall
                         // through to the ordinary tag rather than burning the whole
                         // leg budget standing still.
@@ -1542,6 +1607,16 @@ bool DungeonClearPullAction::Execute(Event /*event*/)
                     // Not in range/LOS yet — fall through to close the gap; we'll
                     // re-enter and cast once within range and line of sight.
                 }
+            }
+
+            // A required patrol comes to the stand. Never follow it around its
+            // circuit, including when the tank has no ranged opener: its western
+            // turn passes inside body-aggro range. The wait budget above owns failure.
+            if (patrol)
+            {
+                DcMovement::StopBot(bot, DcMovement::Stop::HardPin);
+                DcMovement::ClearMovementWait(bot);
+                return true;
             }
 
             // No ranged option (or out of range/LOS / cast failed): body-tag by
@@ -2028,13 +2103,23 @@ namespace
                 // combat when its target became unreachable.
                 if (handoff)
                 {
-                    pull.abortTarget = pull.fizzleTarget;
-                    DC_PULL_INFO("[DC:{}] advanced-pull: pull of {} fizzled {}x "
-                                 "(alive and idle after the camp fight, {:.0f}% hp, "
-                                 "{:.1f}yd) -> handing to normal engage",
-                                 bot->GetName(), pull.fizzleTarget.ToString(),
-                                 pull.fizzleCount, pulled->GetHealthPct(),
-                                 bot->GetExactDist(pulled));
+                    ScriptedPullStage const* stage =
+                        ScriptedPullRegistry::Find(bot->GetMapId(), pull.scriptedStage);
+                    if (stage && stage->IsPatrol())
+                    {
+                        pull.fizzleCount = 0;
+                        PauseUnsafePull(bot, context, "courtyard patrol repeatedly evaded; check the pull and resume");
+                    }
+                    else
+                    {
+                        pull.abortTarget = pull.fizzleTarget;
+                        DC_PULL_INFO("[DC:{}] advanced-pull: pull of {} fizzled {}x "
+                                     "(alive and idle after the camp fight, {:.0f}% hp, "
+                                     "{:.1f}yd) -> handing to normal engage",
+                                     bot->GetName(), pull.fizzleTarget.ToString(),
+                                     pull.fizzleCount, pulled->GetHealthPct(),
+                                     bot->GetExactDist(pulled));
+                    }
                 }
                 else
                     DC_PULL_DEBUG("[DC:{}] advanced-pull: pull of {} fizzled "
@@ -2101,7 +2186,8 @@ namespace
             for (Unit* a : p->getAttackers())
             {
                 if (!a || !a->IsAlive() ||
-                    !ScriptedPullRegistry::IsPackEntry(stage, a->GetEntry()))
+                    !(stage.IsPatrol() ? ScriptedPullRegistry::IsStageTarget(stage, a)
+                                      : ScriptedPullRegistry::IsPackEntry(stage, a->GetEntry())))
                     continue;
                 any = true;
                 if (seen.insert(a->GetGUID()).second)
@@ -2151,7 +2237,8 @@ namespace
             for (Unit* a : p->getAttackers())
             {
                 if (!a || !a->IsAlive() ||
-                    !ScriptedPullRegistry::IsPackEntry(stage, a->GetEntry()))
+                    !(stage.IsPatrol() ? ScriptedPullRegistry::IsStageTarget(stage, a)
+                                      : ScriptedPullRegistry::IsPackEntry(stage, a->GetEntry())))
                     continue;
                 if (!seen.insert(a->GetGUID()).second)
                     continue;

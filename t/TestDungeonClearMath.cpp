@@ -1743,7 +1743,17 @@ TEST(DungeonClearStuckCombatTest, ArmingAtTimeZeroAvoidsTheSentinel)
 // a ~20yd aggro radius), and because playerbots never enters the combat engine on
 // the flag alone, BOTH ladders went inert and the run froze permanently. S1356.
 
-TEST(DcFlaggedCombatGateTest, NotFlaggedAlwaysDrives)
+TEST(DcPullFormationTest, MissingHealerNeverBecomesPermissionToPull)
+{
+    using Verdict = DungeonClearMath::PullFormationVerdict;
+    EXPECT_EQ(DungeonClearMath::DecidePullFormation(false, false), Verdict::Wait);
+    EXPECT_EQ(DungeonClearMath::DecidePullFormation(false, true), Verdict::Pause);
+    // A late follower arriving at the deadline still allows a ready party to go.
+    EXPECT_EQ(DungeonClearMath::DecidePullFormation(true, true), Verdict::Tag);
+    EXPECT_EQ(DungeonClearMath::DecidePullFormation(true, false), Verdict::Tag);
+}
+
+TEST(DcFlaggedCombatGateTest, NoFlagAndNoFightDrives)
 {
     std::uint32_t since = 12345;
     EXPECT_TRUE(DungeonClearMath::MayDriveWhileFlagged(false, false, 1000, 5000, since));
@@ -1757,6 +1767,17 @@ TEST(DcFlaggedCombatGateTest, RealFightAlwaysStandsDown)
     EXPECT_EQ(since, 0u);
     // ...and no amount of elapsed time changes that while the fight is live.
     EXPECT_FALSE(DungeonClearMath::MayDriveWhileFlagged(true, true, 999000, 5000, since));
+}
+
+TEST(DcFlaggedCombatGateTest, TankDroppingCombatDoesNotAbandonFightingFollowers)
+{
+    std::uint32_t since = 1000;
+    // The tank's target died, but a mastiff is still attacking the healer.
+    EXPECT_FALSE(DungeonClearMath::MayDriveWhileFlagged(false, true, 10000, 5000, since));
+    EXPECT_EQ(since, 0u);
+    EXPECT_FALSE(DungeonClearMath::MayDriveWhileFlagged(false, true, 20000, 0, since));
+    // Advance becomes available once that last party enemy is gone.
+    EXPECT_TRUE(DungeonClearMath::MayDriveWhileFlagged(false, false, 20001, 5000, since));
 }
 
 TEST(DcFlaggedCombatGateTest, FlaggedWithNoFightResumesOnlyAfterTheGrace)

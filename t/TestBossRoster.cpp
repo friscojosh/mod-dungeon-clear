@@ -1202,6 +1202,12 @@ TEST(BossRosterRegistryTest, DireMaulNorthDropsChoRush)
     EXPECT_EQ(Find(out, 14324), nullptr)
         << "Cho'Rush is permanently friendly — he must not be in the clear list";
 
+    DungeonBossInfo const* patrol = Find(out, BossRosterRegistry::ObjectiveEntry(15));
+    ASSERT_NE(patrol, nullptr);
+    ASSERT_NE(Find(out, 14326), nullptr);
+    EXPECT_EQ(patrol->kind, DungeonAnchorKind::Objective);
+    EXPECT_LT(BossOrderKey(*patrol), BossOrderKey(*Find(out, 14326)));
+
     // The North bosses that remain keep their DBC order. (Dire Maul shares ONE
     // map-429 patch across wings, so Apply() also appends the East/West
     // objectives — filter to real creatures before checking the order.)

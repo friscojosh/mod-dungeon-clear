@@ -10,12 +10,15 @@
 #include <optional>
 
 #include "Player.h"
+#include "Creature.h"
+#include "Map.h"
 #include "Position.h"
 #include "Unit.h"
 
 #include "Ai/Dungeon/DungeonClear/DcPullContext.h"
 #include "Ai/Dungeon/DungeonClear/DcValueKeys.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
+#include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTargeting.h"
 #include "Playerbots.h"
 
@@ -498,6 +501,26 @@ namespace
         {
             std::vector<ScriptedPullStage> t;
 
+            // Dire Maul North: formation 247708 (Brute + two mastiffs), path
+            // 2477080. Its circuit spans x291..475/y-5..121: a short-radius scan
+            // can see an empty courtyard while the pack is at the other end.
+            // First clear the approach to the west rim, then intercept the patrol
+            // here before descending to Mol'dar. Camp/stand lie on map-429 mesh;
+            // the patrol passes within 10yd of the stand on its western turn.
+            ScriptedPullStage courtyard;
+            courtyard.mapId = 429;
+            courtyard.bossEntry = BossRosterRegistry::ObjectiveEntry(15);
+            courtyard.order = 0;
+            courtyard.name = "Dire Maul North — entrance courtyard patrol";
+            courtyard.spawnIds = {247708, 248166, 248167};
+            courtyard.campX = 255.0f; courtyard.campY = 55.0f; courtyard.campZ = -2.6f;
+            courtyard.standX = 285.0f; courtyard.standY = 90.0f; courtyard.standZ = -3.0f;
+            courtyard.armX = courtyard.standX;
+            courtyard.armY = courtyard.standY;
+            courtyard.armZ = courtyard.standZ;
+            courtyard.armRadius = 15.0f;
+            t.push_back(courtyard);
+
             ScriptedPullStage east;
             east.mapId      = MGT_MAP;
             east.bossEntry  = MGT_SELIN;
@@ -739,6 +762,24 @@ Unit* ScriptedPullRegistry::NearestPackMember(Player* bot, AiObjectContext* ctx,
 {
     if (!bot || !ctx)
         return nullptr;
+    if (s.IsPatrol())
+    {
+        Unit* nearest = nullptr;
+        Position const stand(s.standX, s.standY, s.standZ);
+        auto const& spawns = bot->GetMap()->GetCreatureBySpawnIdStore();
+        for (uint32 const id : s.spawnIds)
+        {
+            auto const range = spawns.equal_range(id);
+            for (auto it = range.first; it != range.second; ++it)
+            {
+                Creature* member = it->second;
+                if (member && member->IsAlive() &&
+                    (!nearest || member->GetExactDist2d(&stand) < nearest->GetExactDist2d(&stand)))
+                    nearest = member;
+            }
+        }
+        return nearest;
+    }
     // Shares the events framework's volume scan (entry-filtered, z-banded, and
     // reachability-probed), so "is this pack still up" means the same thing here
     // as it does for a ClearRadius step.
@@ -808,7 +849,7 @@ ScriptedPullStage const* ScriptedPullRegistry::DueStage(Player* bot, AiObjectCon
     if (!next.has_value())
         return nullptr;
 
-    DcPullContext const& pull = ctx->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
+    DcPullContext& pull = ctx->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
     int32 const pinned = pull.scriptedStage;
 
     // An in-flight stage short-circuits everything below it: the boss/arm gates and
@@ -825,10 +866,14 @@ ScriptedPullStage const* ScriptedPullRegistry::DueStage(Player* bot, AiObjectCon
     {
         if (s->bossEntry != next->entry)
             continue;
-        if (!InArmRange(*s, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
+        bool const required = s->IsPatrol() && pull.requiredPatrolStage == static_cast<int32>(s->order);
+        if (!required && !InArmRange(*s, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ()))
             continue;
+        bool const pending = s->IsPatrol() ? PatrolPending(bot, *s) : NearestPackMember(bot, ctx, *s) != nullptr;
+        if (s->IsPatrol())
+            pull.requiredPatrolStage = pending ? static_cast<int32>(s->order) : -1;
         orders.push_back(s->order);
-        live.push_back(NearestPackMember(bot, ctx, *s) != nullptr);
+        live.push_back(pending);
     }
 
     int32 const pick = SelectOrder(orders, live, /*pinned*/ -1);
@@ -839,6 +884,49 @@ bool ScriptedPullRegistry::IsStageTarget(ScriptedPullStage const& s, Unit const*
 {
     if (!u)
         return false;
+    if (s.IsPatrol())
+    {
+        Creature const* creature = u->ToCreature();
+        return creature && std::find(s.spawnIds.begin(), s.spawnIds.end(), creature->GetSpawnId()) != s.spawnIds.end();
+    }
     return IsPackEntry(s, u->GetEntry()) &&
            InPack(s, u->GetPositionX(), u->GetPositionY(), u->GetPositionZ());
+}
+
+bool ScriptedPullRegistry::PatrolPending(Player* bot, ScriptedPullStage const& s)
+{
+    if (!bot || !bot->GetMap())
+        return true;
+    Map* map = bot->GetMap();
+    auto const& spawns = map->GetCreatureBySpawnIdStore();
+    std::vector<ScriptedPatrolMemberState> members;
+    members.reserve(s.spawnIds.size());
+    for (uint32 const id : s.spawnIds)
+    {
+        auto state = map->GetCreatureRespawnTime(id) != 0
+            ? ScriptedPatrolMemberState::Dead : ScriptedPatrolMemberState::Unknown;
+        auto const range = spawns.equal_range(id);
+        for (auto it = range.first; it != range.second; ++it)
+        {
+            Creature const* member = it->second;
+            if (!member)
+                continue;
+            if (member->IsAlive())
+            {
+                state = ScriptedPatrolMemberState::Alive;
+                break; // a live spawn wins over an old corpse/respawn record
+            }
+            state = ScriptedPatrolMemberState::Dead;
+        }
+        members.push_back(state);
+    }
+    return !PatrolCleared(members);
+}
+
+bool ScriptedPullRegistry::PatrolCleared(std::vector<ScriptedPatrolMemberState> const& members)
+{
+    return !members.empty() && std::all_of(members.begin(), members.end(), [](ScriptedPatrolMemberState state)
+    {
+        return state == ScriptedPatrolMemberState::Dead;
+    });
 }

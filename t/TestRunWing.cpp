@@ -258,6 +258,29 @@ TEST(DcRunWingTest, DireMaulProximityPickIsUnchanged)
     EXPECT_EQ(DcRunWing::PickByProximity(*dm, { Boss(1, 0, 0, 0, 0, 429) }, 0, 0, 0), dm->wings.size());
 }
 
+TEST(DcRunWingTest, EntrancePatrolPrerequisiteBelongsOnlyToDireMaulNorth)
+{
+    DungeonWingLayout const* layout = DungeonWingRegistry::Get(429);
+    ASSERT_NE(layout, nullptr);
+    auto const roster = BossRosterRegistry::Apply(429, DcDiffKey::Dungeon(DUNGEON_DIFFICULTY_NORMAL),
+                                                 {Boss(14326, 1, 410.711f, -3.15041f, -24.558f, 429)});
+    uint32 const patrol = BossRosterRegistry::ObjectiveEntry(15);
+    for (auto const& wing : layout->wings)
+    {
+        auto const filtered = DcRunWing::FilterToWing(roster, wing);
+        bool found = false;
+        for (auto const& anchor : filtered)
+            found = found || anchor.entry == patrol;
+        EXPECT_EQ(found, wing.token == "dm-north");
+        if (wing.token == "dm-north")
+        {
+            ASSERT_EQ(filtered.size(), 2u);
+            EXPECT_EQ(filtered.front().entry, patrol);
+            EXPECT_EQ(filtered.back().entry, 14326u);
+        }
+    }
+}
+
 // ---- terminal boss ---------------------------------------------------------------
 
 TEST(DcRunWingTest, WyrmthalakDownCompletesLbrs)

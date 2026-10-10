@@ -104,7 +104,8 @@ namespace DcCombatFlag
     bool IsHeldByLiveEnemy(Player* p, float radius);
     bool AnyPartyHeldByLiveEnemy(Player* bot, float radius);
 
-    // May a DC rung own this tick? True when not flagged at all, and true again
+    // May a DC rung own this tick? False while any party member is fighting.
+    // Otherwise true when not flagged at all, and true again
     // once the flag has had no engagement behind it continuously for
     // DC_FLAGGED_NO_ENGAGE_GRACE_MS. False while a real fight owns the bot.
     bool MayDrive(Player* bot, AiObjectContext* context);

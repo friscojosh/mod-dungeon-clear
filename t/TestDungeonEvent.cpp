@@ -115,6 +115,20 @@ TEST(DungeonEventTribute, TrapWaitPrecedesApproachAndUsesFarPatrolWindow)
     EXPECT_FALSE(IsSlipkikInTrapWindow(486.848f, 606.483f, 29.0f));
 }
 
+TEST(DungeonEventTribute, DialogueHooksKeepMovementBeyondTheirHoldingAnchor)
+{
+    using namespace DcDireMaulTribute;
+    for (uint32 id : {DISGUISE_EVENT, CLAIM_EVENT})
+    {
+        DungeonEvent const* event = DungeonEventRegistry::Find(MAP, id);
+        ASSERT_NE(event, nullptr);
+        EXPECT_TRUE(event->persistent);
+        EXPECT_TRUE(event->stepsOwnMovement);
+        ASSERT_FALSE(event->steps.empty());
+        EXPECT_EQ(event->steps.front().kind, EventStepKind::Custom);
+    }
+}
+
 TEST(DungeonEventTribute, PartyHoldsAwayFromNativeInteractionTargets)
 {
     using namespace DcDireMaulTribute;

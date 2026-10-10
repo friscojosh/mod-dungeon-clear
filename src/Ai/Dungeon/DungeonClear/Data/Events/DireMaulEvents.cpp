@@ -318,12 +318,14 @@ void RegisterDireMaulEvents(std::vector<DungeonEvent>& out)
                       .Anchored(80)
                       .Custom(DcDireMaulTribute::DISGUISE_HOOK).Timeout(120000)
                       .Persistent()
+                      .StepsOwnMovement()
                       .Build());
 
     out.push_back(EventBuilder(429, DcDireMaulTribute::CLAIM_EVENT, "Claim the full Gordok Tribute")
                       .Anchored(99)
                       .Custom(DcDireMaulTribute::CLAIM_HOOK).Timeout(180000)
                       .Persistent()
+                      .StepsOwnMovement()
                       .Build());
 
     out.push_back(EventBuilder(429, 1, "Ironbark opens the Conservatory Door")

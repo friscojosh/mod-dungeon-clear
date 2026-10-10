@@ -9,6 +9,7 @@
 
 #include "Action.h"
 #include "FollowActions.h"
+#include "GenericSpellActions.h"
 #include "InstanceScript.h"
 #include "Player.h"
 #include "Playerbots.h"
@@ -433,8 +434,10 @@ float DungeonClearCombatMultiplier::GetValue(Action* action)
 
     // Excluding a boss as a primary target does not protect it from splash
     // damage aimed at nearby trash or the King. Tribute uses single-target
-    // combat throughout, including the tank's rotation.
-    if (DcDireMaulTribute::Enabled(bot) && action->getThreatType() == Action::ActionThreatType::Aoe)
+    // combat throughout, including the tank's rotation. Healing also produces
+    // AoE threat in Playerbots; it must remain available to keep the party alive.
+    if (DcDireMaulTribute::Enabled(bot) && action->getThreatType() == Action::ActionThreatType::Aoe &&
+        !dynamic_cast<CastHealingSpellAction*>(action))
         return 0.0f;
 
     std::string const& name = action->getName();

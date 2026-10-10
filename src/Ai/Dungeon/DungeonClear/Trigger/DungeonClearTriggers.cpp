@@ -1337,11 +1337,15 @@ bool DungeonClearPullTrigger::IsActive()
     // sit there with its packs alive until the boss came round, and then tag him
     // into them. Scoped to a boss WITH a pull-back row so every other scripted
     // plan keeps the stand-down it has always had at its own boss.
-    bool const pullbackStageDue =
-        BossPullbackRegistry::Find(bot->GetMapId(), next->entry) != nullptr &&
+    // An objective can also be the camp for its authored trash pull (Dire
+    // Maul's trap approach). Arrival must not suppress the stage that makes
+    // that objective complete. Ordinary bosses retain their existing gate.
+    bool const anchoredStageDue =
+        (next->kind == DungeonAnchorKind::Objective ||
+         BossPullbackRegistry::Find(bot->GetMapId(), next->entry) != nullptr) &&
         DcTickMemoAccess::ScriptedStage(bot, context) != nullptr;
     if (DcTickMemoAccess::AtBossEngage(bot, context, *next) &&
-        !DcTargeting::IsRoomClearActive(bot, context) && !pullback && !pullbackStageDue)
+        !DcTargeting::IsRoomClearActive(bot, context) && !pullback && !anchoredStageDue)
         return false;
     if (!IsBetweenPullsReady(bot, context))
         return false;

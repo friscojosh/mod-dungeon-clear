@@ -176,6 +176,7 @@ namespace
         DcRunState& run = DcRun::Of(context);
         run.paused = true;
         run.pauseReason = reason;
+        run.pausedDoor = ObjectGuid::Empty;
         DcMovement::StopBot(bot, DcMovement::Stop::HardPin);
         DcMovement::ClearMovementWait(bot);
         DC_PULL_INFO("[DC:{}] {}", bot->GetName(), run.pauseReason);

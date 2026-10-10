@@ -762,7 +762,9 @@ public:
     // stage. Everything on the per-tick path goes through
     // DcTickMemoAccess::ScriptedStage instead, which memoises this within the tick.
     static ScriptedPullStage const* DueStage(Player* bot, AiObjectContext* ctx);
-    // Nearest live, reachable pack member of `s` — the pull target for the stage.
+    // Nearest live member from the stand. Volume rows require reachability;
+    // patrol rows resolve by spawn even outside visibility/path-probe range.
+    // The patrol is tagged only when it returns to the stand's range and LOS.
     static Unit* NearestPackMember(Player* bot, AiObjectContext* ctx,
                                    ScriptedPullStage const& s);
     static bool PatrolPending(Player* bot, ScriptedPullStage const& s);

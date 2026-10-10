@@ -104,6 +104,8 @@ namespace DcDireMaulTribute
     }
 
     bool Enabled(Player* bot);
+    // The trap pull must keep the whole party behind the south wall.
+    bool TrapPullActive(Player* bot);
     bool FollowerHoldPoint(Player* bot, float& x, float& y, float& z);
     std::string BlockedReason(Player* bot, std::uint32_t eventId);
     bool SelectForRun(Player* leader, std::string const& option, std::string& error);

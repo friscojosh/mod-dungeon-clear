@@ -9,6 +9,7 @@
 #include "Ai/Dungeon/DungeonClear/Settings/DcSettings.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Value/DungeonClearStateValues.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRunWing.h"
 #include "Ai/Dungeon/DungeonClear/Data/BossSpawnIndex.h"
 #include "Ai/Dungeon/DungeonClear/Value/DungeonBossesValue.h"
@@ -61,6 +62,16 @@ namespace
 bool DcDireMaulTribute::Enabled(Player* bot)
 {
     return TributeRunOwner(bot) != nullptr;
+}
+
+bool DcDireMaulTribute::TrapPullActive(Player* bot)
+{
+    Player* leader = TributeRunOwner(bot);
+    if (!leader)
+        return false;
+    PlayerbotAI* ai = GET_PLAYERBOT_AI(leader);
+    DcPullContext const& pull = ai->GetAiObjectContext()->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
+    return pull.scriptedStage == 0 && pull.phase != DcPullPhase::Idle;
 }
 
 bool DcDireMaulTribute::FollowerHoldPoint(Player* bot, float& x, float& y, float& z)

@@ -994,7 +994,9 @@ bool DungeonClearCampHoldActionBase::Execute(Event /*event*/)
     // exactly right: the TANK's camp was the authored point, the party's was not.
     // While passive, therefore, they take the ordinary tight slot pin like any other
     // held follower, which is what puts them on the coordinate.
-    Position const slot = DcPullPlanner::ComputeCampSlot(bot, camp);
+    // A loose slot or reach extension exposes the trap pull around the wall.
+    bool const tributeTrap = DcDireMaulTribute::TrapPullActive(bot);
+    Position const slot = tributeTrap ? camp : DcPullPlanner::ComputeCampSlot(bot, camp);
     float const toCamp = bot->GetExactDist(&slot);
     // The scripted camp FIGHT — anchored, not held. Everything below that treats
     // "inside the radius" as "settled and waiting" is wrong here, because the bot is
@@ -1012,8 +1014,8 @@ bool DungeonClearCampHoldActionBase::Execute(Event /*event*/)
     // kill order may have overridden it), so it is the only distance that decides
     // whether standing at the camp means fighting or watching. No target, a dead one,
     // or a keep-out room -> the plain leash, unchanged.
-    float followerLeash = DC_SCRIPTED_PULL_FOLLOWER_LEASH;
-    if (campFight && !inNoGoRoom)
+    float followerLeash = tributeTrap ? 3.0f : DC_SCRIPTED_PULL_FOLLOWER_LEASH;
+    if (campFight && !inNoGoRoom && !tributeTrap)
     {
         if (Unit* const fightTarget =
                 context->GetValue<Unit*>(DcKey::Stock::CurrentTarget)->Get())

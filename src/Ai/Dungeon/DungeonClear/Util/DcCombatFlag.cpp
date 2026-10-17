@@ -243,6 +243,29 @@ namespace DcCombatFlag
         return scan;
     }
 
+    bool HeldByLiveBoss(Player* p)
+    {
+        if (!p || !p->IsInCombat())
+            return false;
+        Map* const map = p->GetMap();
+        for (auto const& kv : p->GetCombatManager().GetPvECombatRefs())
+        {
+            CombatReference* const ref = kv.second;
+            if (!ref)
+                continue;
+            Unit* const other = ref->GetOther(p);
+            Creature* const c = other ? other->ToCreature() : nullptr;
+            if (!c || !c->IsAlive() || c->GetMap() != map || c->GetCombatManager().IsInEvadeMode())
+                continue;
+            if (p->GetExactDistSq(c) > DC_ENGAGEMENT_RADIUS * DC_ENGAGEMENT_RADIUS)
+                continue;
+            if (DungeonClearMath::IsBossCombatHolder(true, c->isWorldBoss(), c->IsDungeonBoss(),
+                                                     c->GetCreatureTemplate()->rank))
+                return true;
+        }
+        return false;
+    }
+
     bool IsHeldByLiveEnemy(Player* p, float radius)
     {
         // Cheap reads first, in the order that short-circuits most ticks: the

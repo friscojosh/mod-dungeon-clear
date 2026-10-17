@@ -429,7 +429,9 @@ std::string DcStatusPublisher::BuildStatusPayload(PlayerbotAI* botAI)
              // Only meaningful when pullSetting == 2; the addon shows it as the
              // Dynamic sub-label.
              // Appended last so older addons ignore it.
-             << pullDecision;
+             << pullDecision << "\t"
+             // Selected run variant, appended for backward-compatible clients.
+             << (DcRun::Of(context).direMaulTribute ? "tribute" : "normal");
 
     return addonMsg.str();
 }

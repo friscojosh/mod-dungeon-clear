@@ -43,6 +43,11 @@ namespace
     }
 }
 
+bool DcHazard::TrapVacatesFor(bool rowRangedOnly, bool botIsRangedOrHealer)
+{
+    return !rowRangedOnly || botIsRangedOrHealer;
+}
+
 DcHazard::LiveSet DcHazard::Sample(Player* bot)
 {
     LiveSet live;
@@ -122,6 +127,10 @@ DcHazard::LiveSet DcHazard::Sample(Player* bot)
 
     if (wantTraps)
     {
+        // Resolved once per sample: only a vacateRangedOnly row consults it.
+        bool const rangedOrHealer =
+            !PlayerbotAI::IsTank(bot) && (PlayerbotAI::IsRanged(bot) || PlayerbotAI::IsHeal(bot));
+
         // A GAMEOBJECT_TYPE_TRAP is neither a unit nor a dynamic object: BOTH of
         // the resolvers above return nullptr on one of these guids and the fire
         // would read as clean ground. As with a pool, the guid going dead IS how
@@ -141,9 +150,16 @@ DcHazard::LiveSet DcHazard::Sample(Player* bot)
             if (!t || go->GetMapId() != mapId)
                 continue;
 
+            // A single-use trap (a hatched Rookery egg) stays in the world, unspawned,
+            // until its respawn: it can no longer fire, so it is clean ground.
+            if (!go->isSpawned())
+                continue;
+
+            float const vacate =
+                TrapVacatesFor(t->vacateRangedOnly, rangedOrHealer) ? t->vacateRadius : 0.0f;
             live.push_back(LiveHazard{ go->GetPositionX(), go->GetPositionY(), go->GetPositionZ(),
                                        t->radius, t->zBand,
-                                       t->vacateRadius, t->holdBand, t->retreatSlack,
+                                       vacate, t->holdBand, t->retreatSlack,
                                        true });
         }
     }

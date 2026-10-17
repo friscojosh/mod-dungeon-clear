@@ -5,6 +5,7 @@
 
 #include "DungeonClearActions.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 
 #include <algorithm>
 #include <cmath>
@@ -1048,7 +1049,8 @@ bool DungeonClearEngageBossAction::Execute(Event event)
     // anchor and say why, rather than substituting the one behaviour that kills the
     // party. The pull re-arms on its own the next tick it can (the boss wanders
     // back, the abort latch clears at the Engage cleanup).
-    if (BossPullbackRegistry::Find(bot->GetMapId(), next->entry))
+    if (BossPullback const* const pullbackRow =
+            BossPullbackRegistry::Find(bot->GetMapId(), next->entry))
     {
         DcMovement::StopBot(bot, DcMovement::Stop::Hold);
 
@@ -1065,6 +1067,32 @@ bool DungeonClearEngageBossAction::Execute(Event event)
             StallDungeonClear(botAI,
                 "Can't pull " + next->name + " back to safe ground (the drag kept "
                 "failing). Use 'dc skip' to move to the next boss.");
+            return true;
+        }
+
+        // A PATROLLING pull-back boss (BossPullback::tagX) is waited for, and that
+        // wait is the plan working, not the pull standing down. The pull only arms
+        // while he is inside his tag window — the stretch of his path that passes
+        // the anchor — and he is somewhere else on the loop for most of every lap
+        // (Baron Geddon's is 554yd), so this branch can own the tick for minutes
+        // on end with nothing wrong.
+        //
+        // So say so, the way the two holds above this rung do: clear any stall —
+        // a wait on purpose must never leave a stale reason for the stalled
+        // fallback to act on — and publish what the raid is waiting FOR, so the
+        // status poll reads a reason instead of a tank standing still. AFTER the
+        // abort latch above, which is a real failure and must keep its stall; and
+        // only while no scripted stage is due, because then the raid is not
+        // waiting on the patrol at all — it is between two of its own trash pulls
+        // (between-pulls readiness, the stage muster) and the generic line below
+        // is the honest one.
+        if (pullbackRow->HasTagWindow() &&
+            !BossPullbackRegistry::InTagWindow(*pullbackRow, boss->GetPositionX(),
+                                               boss->GetPositionY()) &&
+            DcTickMemoAccess::ScriptedStage(bot, context) == nullptr)
+        {
+            ClearStall(context);
+            SetPhase(context, "waiting for " + next->name + "'s patrol to come round");
             return true;
         }
 
@@ -2201,6 +2229,11 @@ bool DcObjectiveArriveAction::Execute(Event /*event*/)
 
     if (outcome == EventDriveOutcome::Stalled)
     {
+        if (std::string reason = DcDireMaulTribute::BlockedReason(bot, next->eventId); !reason.empty())
+        {
+            StallDungeonClear(botAI, reason + " Resolve it, then use dc off and dc on tribute to retry.");
+            return true;
+        }
         // The event needs the human (something the bot can't drive). Stall so
         // the player can sort it; they can also `dc skip` past the objective.
         StallDungeonClear(botAI, "I can't progress the event at " + next->name +

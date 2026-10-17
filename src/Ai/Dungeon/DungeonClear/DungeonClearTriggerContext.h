@@ -9,6 +9,7 @@
 #include "ChatCommandTrigger.h"
 #include "NamedObjectContext.h"
 #include "Ai/Dungeon/DungeonClear/Trigger/DungeonClearTriggers.h"
+#include "Ai/Dungeon/DungeonClear/Action/DcMarkTargets.h"
 
 class DungeonClearTriggerContext : public NamedObjectContext<Trigger>
 {
@@ -45,6 +46,7 @@ public:
         creators["dungeon clear objective engage combat"] = &DungeonClearTriggerContext::objective_engage_combat;
         creators["dungeon clear regroup combat"] = &DungeonClearTriggerContext::regroup_combat;
         creators["dungeon clear break stuck combat"] = &DungeonClearTriggerContext::break_stuck_combat;
+        creators["dungeon clear mark targets"] = &DungeonClearTriggerContext::mark_targets;
         creators["dungeon clear heal reposition"] = &DungeonClearTriggerContext::heal_reposition;
         creators["dungeon clear hazard vacate"] = &DungeonClearTriggerContext::hazard_vacate;
         creators["dungeon clear hor stay ahead"] = &DungeonClearTriggerContext::hor_stay_ahead;
@@ -104,6 +106,7 @@ private:
     static Trigger* objective_engage_combat(PlayerbotAI* ai) { return new DungeonClearObjectiveEngageCombatTrigger(ai); }
     static Trigger* regroup_combat(PlayerbotAI* ai) { return new DungeonClearRegroupCombatTrigger(ai); }
     static Trigger* break_stuck_combat(PlayerbotAI* ai) { return new DungeonClearBreakStuckCombatTrigger(ai); }
+    static Trigger* mark_targets(PlayerbotAI* ai) { return new DungeonClearMarkTargetsTrigger(ai); }
     static Trigger* heal_reposition(PlayerbotAI* ai) { return new DungeonClearHealRepositionTrigger(ai); }
     static Trigger* hazard_vacate(PlayerbotAI* ai) { return new DungeonClearHazardVacateTrigger(ai); }
     static Trigger* hor_stay_ahead(PlayerbotAI* ai) { return new DungeonClearHorStayAheadTrigger(ai); }

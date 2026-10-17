@@ -95,14 +95,15 @@ namespace DungeonClearGeometry
         return committed + 1;
     }
 
-    void ApplyLiquidAreaCosts(dtQueryFilterExt& filter)
+    void ApplyTerrainAreaCosts(dtQueryFilterExt& filter)
     {
         // dtQueryFilterExt::getCost multiplies each edge by getAreaCost(area), and
-        // the mmap generator stamps liquid polys with area == the NavTerrain value
-        // (NAV_WATER / NAV_MAGMA), so these indices line up 1:1 with poly areas.
-        // NAV_GROUND keeps its default 1.0 cost. Server-only conf reads — safe off
-        // the map thread.
+        // the mmap generator stamps polys with area == the NavTerrain value
+        // (NAV_WATER / NAV_MAGMA / NAV_GROUND_STEEP), so these indices line up 1:1
+        // with poly areas. NAV_GROUND keeps its default 1.0 cost. Server-only conf
+        // reads — safe off the map thread.
         filter.setAreaCost(NAV_WATER, DcSettings::GetFloat(ObjectGuid::Empty, "WaterPathCost"));
         filter.setAreaCost(NAV_MAGMA, DcSettings::GetFloat(ObjectGuid::Empty, "MagmaPathCost"));
+        filter.setAreaCost(NAV_GROUND_STEEP, DcSettings::GetFloat(ObjectGuid::Empty, "SteepPathCost"));
     }
 }

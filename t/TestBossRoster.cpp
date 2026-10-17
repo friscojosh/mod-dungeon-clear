@@ -1202,7 +1202,7 @@ TEST(BossRosterRegistryTest, DireMaulNorthDropsChoRush)
     EXPECT_EQ(Find(out, 14324), nullptr)
         << "Cho'Rush is permanently friendly — he must not be in the clear list";
 
-    DungeonBossInfo const* patrol = Find(out, BossRosterRegistry::ObjectiveEntry(15));
+    DungeonBossInfo const* patrol = Find(out, BossRosterRegistry::ObjectiveEntry(24));
     ASSERT_NE(patrol, nullptr);
     ASSERT_NE(Find(out, 14326), nullptr);
     EXPECT_EQ(patrol->kind, DungeonAnchorKind::Objective);
@@ -1721,4 +1721,109 @@ TEST(BossRosterDoneTest, RosterPatchCarriesInstanceDataThroughApply)
     EXPECT_EQ(o->doneInstanceDataId, 9);
     EXPECT_EQ(o->doneInstanceDataValue, 3u);
     EXPECT_EQ(o->doneBossStateIndex, -1);
+}
+
+// Upper Blackrock Spire (fork: friscojosh): the balcony Warchief Rend is only
+// reachable through the stadium exit door his own encounter opens, so the patch
+// removes his row and OBJ(1) at the arena centre stands in for the encounter. It
+// must keep Rend's DBC bit (11), so it sorts between Solakar (10) and The Beast
+// (12), and must complete on his boss-state slot (10), not the bit.
+TEST(BossRosterRegistryTest, UbrsStadiumObjectiveReplacesBalconyRend)
+{
+    EXPECT_TRUE(BossRosterRegistry::HasPatch(229));
+
+    std::vector<DungeonBossInfo> base = {
+        Boss(9816, 9, "Pyroguard Emberseer", 229),
+        Boss(10264, 10, "Solakar Flamewreath", 229),
+        Boss(10429, 11, "Warchief Rend Blackhand", 229),
+        Boss(10430, 12, "The Beast", 229),
+        Boss(10363, 13, "General Drakkisath", 229),
+    };
+    std::vector<DungeonBossInfo> out = BossRosterRegistry::Apply(229, DcDiffKey::Dungeon(DUNGEON_DIFFICULTY_NORMAL), base);
+
+    EXPECT_EQ(Find(out, 10429), nullptr);
+
+    int solakarIdx = -1, stadiumIdx = -1, beastIdx = -1;
+    for (int i = 0; i < (int)out.size(); ++i)
+    {
+        if (out[i].entry == 10264)
+            solakarIdx = i;
+        else if (out[i].entry == 10430)
+            beastIdx = i;
+        else if (out[i].entry == BossRosterRegistry::ObjectiveEntry(1))
+            stadiumIdx = i;
+    }
+
+    ASSERT_NE(solakarIdx, -1);
+    ASSERT_NE(stadiumIdx, -1);
+    ASSERT_NE(beastIdx, -1);
+    EXPECT_LT(solakarIdx, stadiumIdx);
+    EXPECT_LT(stadiumIdx, beastIdx);
+
+    DungeonBossInfo const& stadium = out[stadiumIdx];
+    EXPECT_EQ(stadium.kind, DungeonAnchorKind::Objective);
+    EXPECT_EQ(stadium.encounterIndex, 11u);
+    EXPECT_EQ(stadium.doneBossStateIndex, 10);
+    EXPECT_EQ(stadium.eventId, 1u);
+}
+
+// Upper Blackrock Spire (fork: friscojosh): the seven Dragonspire Hall rune packs
+// and then the Blackrock Altar must come before Emberseer, each on its OWN order
+// key — the picker advances to the lowest key strictly greater than the one just
+// finished, so a shared key would skip all but one. Runes complete on their own
+// DATA_HALL_RUNE slots (16-22), the altar on Emberseer's (9).
+TEST(BossRosterRegistryTest, UbrsRunesThenAltarPrecedeEmberseer)
+{
+    std::vector<DungeonBossInfo> base = {
+        Boss(9816, 9, "Pyroguard Emberseer", 229),
+        Boss(10430, 12, "The Beast", 229),
+        Boss(10363, 13, "General Drakkisath", 229),
+    };
+    std::vector<DungeonBossInfo> out = BossRosterRegistry::Apply(229, DcDiffKey::Dungeon(DUNGEON_DIFFICULTY_NORMAL), base);
+
+    std::vector<uint32> keys;
+    std::vector<int32> runeSlots;
+    int altarIdx = -1, emberseerIdx = -1, beastIdx = -1;
+    for (int i = 0; i < (int)out.size(); ++i)
+    {
+        keys.push_back(out[i].orderOverride >= 0 ? uint32(out[i].orderOverride) : out[i].encounterIndex);
+        if (out[i].entry == 9816)
+            emberseerIdx = i;
+        else if (out[i].entry == 10430)
+            beastIdx = i;
+        else if (out[i].entry == BossRosterRegistry::ObjectiveEntry(9))
+            altarIdx = i;
+        else if (out[i].kind == DungeonAnchorKind::Objective && out[i].eventId >= 2 && out[i].eventId <= 8)
+        {
+            EXPECT_LT(i, altarIdx < 0 ? (int)out.size() : altarIdx);
+            runeSlots.push_back(out[i].doneBossStateIndex);
+        }
+    }
+
+    ASSERT_EQ(runeSlots.size(), 7u);
+    std::sort(runeSlots.begin(), runeSlots.end());
+    EXPECT_EQ(runeSlots, (std::vector<int32>{ 16, 17, 18, 19, 20, 21, 22 }));
+    ASSERT_NE(altarIdx, -1);
+    ASSERT_NE(emberseerIdx, -1);
+    ASSERT_NE(beastIdx, -1);
+    EXPECT_LT(altarIdx, emberseerIdx);
+    EXPECT_LT(emberseerIdx, beastIdx);
+    EXPECT_EQ(out[altarIdx].doneBossStateIndex, 9);
+    EXPECT_EQ(out[emberseerIdx].encounterIndex, 9u);  // kill-bit untouched by the reorder
+
+    // The pack registration is the first UBRS stop, done by the room slot (15).
+    DungeonBossInfo const* reg = Find(out, BossRosterRegistry::ObjectiveEntry(10));
+    ASSERT_NE(reg, nullptr);
+    EXPECT_EQ(reg->doneBossStateIndex, 15);
+    EXPECT_EQ(reg->eventId, 10u);
+    EXPECT_EQ(&out.front(), reg);
+
+    // The Beast's approach stop comes right before him, done by his slot (12).
+    DungeonBossInfo const* approach = Find(out, BossRosterRegistry::ObjectiveEntry(11));
+    ASSERT_NE(approach, nullptr);
+    EXPECT_EQ(approach->doneBossStateIndex, 12);
+    EXPECT_EQ(approach + 1, &out[beastIdx]);
+
+    for (std::size_t i = 1; i < keys.size(); ++i)
+        EXPECT_LT(keys[i - 1], keys[i]) << "UBRS anchors " << i - 1 << " and " << i << " share an order key";
 }

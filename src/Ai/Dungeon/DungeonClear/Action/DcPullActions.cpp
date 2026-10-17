@@ -47,6 +47,8 @@
 #include "Ai/Dungeon/DungeonClear/Util/DungeonEventExecutor.h"
 #include "Ai/Dungeon/DungeonClear/Util/ChunkedPathfinder.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcDoorPolicy.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcMovement.h"
 #include "Ai/Dungeon/DungeonClear/Util/NavmeshSnap.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcPathWorker.h"
@@ -2275,6 +2277,7 @@ bool DungeonClearPullManeuverAction::Execute(Event /*event*/)
 {
     DcPullContext& pull = context->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
     Position& camp = pull.camp;
+    bool const tributeTrap = DcDireMaulTribute::TrapPullActive(bot);
     uint32 const now = getMSTime();
     DcPullPhase const phase = pull.phase;
     DcLatchRoomCampFight(bot, context, pull);
@@ -2372,6 +2375,14 @@ bool DungeonClearPullManeuverAction::Execute(Event /*event*/)
             }
             else if (ScriptedPullEngageStalled(pull.scriptedEngageSince, now))
             {
+                if (tributeTrap)
+                {
+                    // Stock recovery chases toward Slip'kik. Fail safely if the
+                    // casters cannot be brought behind cover instead.
+                    DcRun::Of(botAI).tributeFailureReason =
+                        "Tribute stopped: the trap warlocks could not be brought behind cover.";
+                    return true;
+                }
                 DC_PULL_INFO("[DC:{}] scripted-pull: stage [{}] camp fight has not "
                              "moved the pack's health ({:.0f}%) in {}s — it has "
                              "stopped happening, not slowed down -> retiring the "
@@ -2404,7 +2415,7 @@ bool DungeonClearPullManeuverAction::Execute(Event /*event*/)
             //
             // Re-arms the progress clock, so the retirement above can only fire once
             // the camp has run out of segment to give.
-            else if (ScriptedPullStandoffStalled(pull.scriptedEngageSince, now))
+            else if (!tributeTrap && ScriptedPullStandoffStalled(pull.scriptedEngageSince, now))
             {
                 Unit* const held = ScriptedPackNearestStandoff(
                     bot, *stage, camp, DC_SCRIPTED_PULL_LEASH);
@@ -2462,6 +2473,8 @@ bool DungeonClearPullManeuverAction::Execute(Event /*event*/)
         char const* const leashTag =
             pull.scriptedStage >= 0 ? "scripted-pull" : "room-clear";
         float const toCamp = bot->GetExactDist(&camp);
+        float const tankLeash = tributeTrap ? 3.0f : DC_SCRIPTED_PULL_LEASH;
+        float const recallHome = tributeTrap ? 1.0f : DC_SCRIPTED_PULL_RECALL_HOME;
         // A TANK STANDING IN FIRE IS ALLOWED TO BE OFF THE CAMP. The leash and a
         // ground-effect step-out are both right and they want different places, so
         // the leash is the one that gives — see DcInGroundEffect. It suppresses the
@@ -2469,7 +2482,7 @@ bool DungeonClearPullManeuverAction::Execute(Event /*event*/)
         // false the instant the tank is clear, so the leash re-arms by itself if the
         // step-out left it genuinely out of position.
         bool const inGroundEffect = DcInGroundEffect(context);
-        if (!pull.scriptedRecall && toCamp > DC_SCRIPTED_PULL_LEASH && !inGroundEffect)
+        if (!pull.scriptedRecall && toCamp > tankLeash && !inGroundEffect)
         {
             pull.scriptedRecall = true;
             // Arm the ground ratchet at the distance the leash tripped at (see the
@@ -2482,14 +2495,14 @@ bool DungeonClearPullManeuverAction::Execute(Event /*event*/)
             DcMovement::ClearMovementWait(bot);
             DC_PULL_INFO("[DC:{}] {}: tank strayed {:.1f}yd from the camp "
                          "mid-fight (leash {:.0f}) -> recalling",
-                         bot->GetName(), leashTag, toCamp, DC_SCRIPTED_PULL_LEASH);
+                         bot->GetName(), leashTag, toCamp, tankLeash);
         }
         if (pull.scriptedRecall)
         {
             // Home is a BAND, not the anchor point — see DC_SCRIPTED_PULL_RECALL_HOME.
             // Walking the last ten yards back onto the exact coordinate is what put
             // the tank back inside whatever pushed it off in the first place.
-            if (toCamp <= DC_SCRIPTED_PULL_RECALL_HOME)
+            if (toCamp <= recallHome)
             {
                 pull.scriptedRecall = false;
                 pull.scriptedRecallBest = 0.0f;

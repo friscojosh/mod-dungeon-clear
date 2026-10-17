@@ -810,6 +810,19 @@ DungeonClear.WaterPathCost = 3.0
 DungeonClear.MagmaPathCost = 20.0
 
 #
+#    DungeonClear.SteepPathCost
+#        As WaterPathCost, but for steep ground: the 50-60 degree slopes the
+#        navmesh generator tags as steep. Still walkable (creatures use them), so
+#        a ramp that is the only way up is always taken, but a level route up to
+#        this many times longer is preferred, which keeps the party off walls
+#        and cliff faces. 1.0 = no preference.
+#
+#        Default: 4.0
+#
+
+DungeonClear.SteepPathCost = 4.0
+
+#
 #    DungeonClear.SwimEnable
 #        Enable submerged swim legs. The navmesh keeps only a flat water-surface
 #        sheet over deep water (the floor under liquid is discarded at mmap-build

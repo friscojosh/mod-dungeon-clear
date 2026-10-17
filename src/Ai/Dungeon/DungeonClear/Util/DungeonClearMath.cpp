@@ -90,38 +90,61 @@ std::uint32_t DungeonClearMath::EstimateAggroCount(std::vector<DynPullMob> const
             inSet[i] = 1;
     }
 
-    // One assist hop (no transitivity). A chainEligible mob within assistRadius of
-    // a SEED mob joins via CallForHelp, but proximity aggro from a fixed camp does
-    // not chain, so an assisted mob does not seed further proximity or assist.
-    // Iterate over a SNAPSHOT of the seed so newly-added mobs can't propagate.
-    std::vector<char> const seed = inSet;
-    for (std::size_t j = 0; j < n; ++j)
+    // Formation closure of the seed first: you cannot pull half a formation, and
+    // every member it drags in is itself a caller for the assist pass below.
+    auto closePacks = [&](std::vector<std::size_t>& added)
     {
-        if (seed[j] || !eligible(j))
-            continue;
         for (std::size_t i = 0; i < n; ++i)
         {
-            if (!seed[i])
+            if (!inSet[i] || mobs[i].packId == 0)
                 continue;
-            if (sameLevel(i, j) && dist2d(i, j) <= assistRadius)
-            {
-                inSet[j] = 1;
-                break;
-            }
+            std::size_t const r = find(i);
+            for (std::size_t k = 0; k < n; ++k)
+                if (!inSet[k] && find(k) == r)
+                {
+                    inSet[k] = 1;
+                    added.push_back(k);
+                }
         }
-    }
+    };
 
-    // Formation closure: a counted member drags its whole pack in — you cannot
-    // pull half a formation. This completes packs; it does not re-seed proximity
-    // or assist, so it cannot cascade.
+    // Assist, TRANSITIVELY (fork: friscojosh). Proximity aggro from a fixed camp
+    // does not chain — that stays exactly as the seed above has it. ASSIST does:
+    // Unit::Attack calls CallAssistance() for every creature entering the fight,
+    // and CreatureGroup::MemberEngagingTarget pushes a whole groupAI-3 formation in
+    // at once, each member calling from its OWN position (at T=0, its spawn). So a
+    // helper that joins is itself a caller, and its formation's members are too;
+    // the chain runs until nothing new joins. The reach is the engine's:
+    // AnyAssistCreatureInRangeCheck hands CreatureFamilyAssistanceRadius to
+    // IsWithinDistInMap with both combat reaches ADDED (3D), so two ~2yd-reach
+    // elites link at ~14yd, not 10. The old one-hop, 2D, reach-less model missed
+    // both halves of UBRS's Furnace (12.2yd apart, linked) and the Hall of
+    // Blackhand's two Captain formations (3.8yd, linked through a third).
+    std::vector<std::size_t> frontier;
     for (std::size_t i = 0; i < n; ++i)
+        if (inSet[i])
+            frontier.push_back(i);
+    closePacks(frontier);
+    while (!frontier.empty())
     {
-        if (!inSet[i] || mobs[i].packId == 0)
-            continue;
-        std::size_t const r = find(i);
-        for (std::size_t k = 0; k < n; ++k)
-            if (find(k) == r)
-                inSet[k] = 1;
+        std::vector<std::size_t> next;
+        for (std::size_t caller : frontier)
+            for (std::size_t j = 0; j < n; ++j)
+            {
+                if (inSet[j] || !eligible(j) || !sameLevel(caller, j))
+                    continue;
+                float const dx = mobs[caller].x - mobs[j].x;
+                float const dy = mobs[caller].y - mobs[j].y;
+                float const dz = mobs[caller].z - mobs[j].z;
+                float const reach = assistRadius + mobs[caller].combatReach + mobs[j].combatReach;
+                if (dx * dx + dy * dy + dz * dz <= reach * reach)
+                {
+                    inSet[j] = 1;
+                    next.push_back(j);
+                }
+            }
+        closePacks(next);
+        frontier.swap(next);
     }
 
     if (countedOut)

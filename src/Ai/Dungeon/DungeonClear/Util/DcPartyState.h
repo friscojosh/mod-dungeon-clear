@@ -45,6 +45,13 @@ public:
     //    never trips in healthy pull states — see GetSpreadGate.
     // Dead members are not blocking — the party-died trigger handles them.
     // Callers pass RestMinHpPct()/RestMinMpPct() for the recovery thresholds.
+    // A member a raid strategy has standing on an assigned spot ahead of a fight
+    // (mod-playerbots sets "raid holds position": Ragnaros' chamber, before he is
+    // summoned). Such a member is where it belongs however far from the tank that
+    // is: no spread check counts it out of range and no rescue brings it back.
+    // False for a real player, and on a mod-playerbots without the value.
+    static bool HoldsRaidPosition(Player* member);
+
     static bool IsPartyReady(Player* bot, float minHpPct, float minMpPct, float maxSpread,
                              Position const* spreadAnchor = nullptr,
                              float maxTankGap = 0.0f);

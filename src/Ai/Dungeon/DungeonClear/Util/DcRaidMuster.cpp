@@ -8,8 +8,10 @@
 #include "DcRun.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
 #include "Ai/Dungeon/DungeonClear/Settings/DcSettings.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcGroupPlan.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRaidMusterDecision.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcStatusPublisher.h"
+#include "Chat.h"
 #include "Group.h"
 #include "Log.h"
 #include "Map.h"
@@ -18,6 +20,7 @@
 #include "Playerbots.h"
 #include "Timer.h"
 #include <string>
+#include <vector>
 
 namespace
 {
@@ -47,6 +50,62 @@ void ApplyMusterRestOverride(Player* bot, DcRunState& run)
     DcSettings::SetOverride(bot->GetGUID(), "RestHealthPct", 100.0, nullptr);
     DcSettings::SetOverride(bot->GetGUID(), "RestManaPct", 100.0, nullptr);
     run.musterRestOverride = true;
+}
+
+// Put the raid's shamans where their Tremor Totem counts (DcGroupPlan.h has the why):
+// one per sub-group, the main tank's group first. Run as each muster arms, so a raid that
+// was assembled class by class is sorted before the first boss and anyone who joined or
+// was moved since is picked up before the next. Swaps only, never a tank. A real player may be
+// the one who makes room (Josh, 2026-10-06: the AI may move the player between groups) and is
+// told so in their own chat, with the reason.
+void ArrangeSubGroups(Player* bot)
+{
+    Group* group = bot->GetGroup();
+    if (!group || !group->isRaidGroup())
+        return;
+
+    std::vector<Player*> players;
+    std::vector<DcGroupPlan::Member> members;
+    for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+    {
+        Player* member = ref->GetSource();
+        if (!member)
+            continue;
+
+        DcGroupPlan::Member m;
+        m.group = member->GetSubGroup();
+        m.shaman = member->getClass() == CLASS_SHAMAN;
+        m.tank = PlayerbotAI::IsTank(member);
+        m.mainTank = PlayerbotAI::IsMainTank(member);
+        m.healer = PlayerbotAI::IsHeal(member);
+        m.melee = !m.tank && !m.healer && !PlayerbotAI::IsRanged(member);
+        m.movable = true;
+        players.push_back(member);
+        members.push_back(m);
+    }
+
+    for (auto const& [shamanIndex, outIndex] : DcGroupPlan::Plan(members))
+    {
+        Player* shaman = players[shamanIndex];
+        Player* out = players[outIndex];
+        uint8 const to = out->GetSubGroup();
+        uint8 const from = shaman->GetSubGroup();
+        group->ChangeMembersGroup(shaman->GetGUID(), to);
+        group->ChangeMembersGroup(out->GetGUID(), from);
+        for (Player* moved : { shaman, out })
+        {
+            if (GET_PLAYERBOT_AI(moved) || !moved->GetSession())
+                continue;
+            ChatHandler(moved->GetSession())
+                .PSendSysMessage("Raid groups: you were moved to group {} so that {} (shaman) can put a Tremor "
+                                 "Totem in group {}. It only frees its own party from fear.",
+                                 (moved == shaman ? to : from) + 1, shaman->GetName(), to + 1);
+        }
+        LOG_INFO("playerbots.dungeonclear",
+                 "[DC:{}] raid groups: {} (shaman) to group {}, {} to group {} — one Tremor Totem per "
+                 "group, tanks' groups first",
+                 bot->GetName(), shaman->GetName(), to + 1, out->GetName(), from + 1);
+    }
 }
 
 // One ForceRebuff round: every same-map bot member opens a rebuff window
@@ -182,6 +241,7 @@ bool DcRaidMuster::Holds(Player* bot, PlayerbotAI* botAI, AiObjectContext* conte
                 // Only reachable as Idle -> Resting: the muster arming for
                 // this boss. Stamp the whole-muster budget here.
                 run.musterArmedMs = now;
+                ArrangeSubGroups(bot);
                 ApplyMusterRestOverride(bot, run);
                 LOG_INFO("playerbots.dungeonclear",
                          "[DC:{}] raid muster: staging at {} — topping the raid "

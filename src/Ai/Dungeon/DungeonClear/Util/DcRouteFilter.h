@@ -44,7 +44,7 @@
 //
 // One instance per Build (cheap: one registry membership check in the ctor).
 // getAreaCost / include/exclude flags are inherited unchanged, so callers still
-// apply the liquid-avoidance area costs (DungeonClearGeometry::ApplyLiquidAreaCosts)
+// apply the liquid-avoidance area costs (DungeonClearGeometry::ApplyTerrainAreaCosts)
 // on top.
 class DcRouteFilter : public dtQueryFilterExt
 {

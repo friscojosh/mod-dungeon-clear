@@ -90,6 +90,41 @@ struct BossPullback
     // Kept because "the boss physically cannot reach the party" is a real class
     // of failure, but a boss that is merely SLOW to arrive is not it.
     bool   summonWhenStuckBelow{false};
+
+    // TAG WINDOW opt-in, for a boss that PATROLS. (tagX,tagY) and a 2D radius in
+    // yards; a radius of 0 (the default) means "no window", and the row behaves
+    // exactly as it always has — the pull arms the moment the tank is on the anchor
+    // and the boss is alive anywhere on the map.
+    //
+    // DEFAULT OFF, and for a boss that stands still it should stay off: there the
+    // distance from the anchor to the boss is a fact about the room, measured once
+    // when the row was authored. A patroller breaks that. The tag leg walks to his
+    // LIVE position with the chase leash skipped, so "alive anywhere on the map" can
+    // mean a tag taken from the far end of a 250yd loop, through every pack between
+    // here and there — the anchor was chosen for the ground around IT, and says
+    // nothing about the ground he happens to be crossing when the tank arrives.
+    //
+    // So a row with a window waits for him. The raid holds on the anchor — the same
+    // hold it already makes whenever the pull is not due — and the pull arms only on
+    // a tick his live position is inside the window: the stretch of his path that
+    // passes the anchor, over ground the plan has already emptied.
+    //
+    // IT ONLY DELAYS THE START. Once the pull has committed
+    // (DcPullContext::bossPullback) the window is not consulted again: he keeps
+    // walking, he will be outside it within seconds, and a maneuver that dissolved
+    // when he stepped over the line would strand the party passive at the camp with
+    // nothing left to release them. An in-flight pull finishes on the existing leg
+    // watchdogs, exactly like a row with no window.
+    //
+    // Size it from his waypoints, not by eye: it should hold the nodes nearest the
+    // anchor and exclude the ones either side, and the excluded ones are the
+    // statement of what the tank must never be sent past. 2D on purpose — a patrol
+    // path is a line on a floor, and the anchor's own Z already says which floor.
+    float  tagX{0.0f}, tagY{0.0f};
+    float  tagRadius{0.0f};
+
+    // True once a row names a tag window.
+    bool HasTagWindow() const { return tagRadius > 0.0f; }
 };
 
 class BossPullbackRegistry
@@ -104,6 +139,12 @@ public:
     // callers (the engage gate and the camp guard) so a map with no rows pays one
     // bool and nothing else.
     static bool HasRows(uint32 mapId);
+
+    // May a pull of `row`'s boss START with him standing at (x,y)? Always true for
+    // a row with no tag window; otherwise true iff the point is inside it (2D, the
+    // edge counts as inside). Pure — the caller supplies his live position — so the
+    // geometry is unit-tested without a boss to stand in it. See BossPullback::tagX.
+    static bool InTagWindow(BossPullback const& row, float x, float y);
 };
 
 #endif  // _PLAYERBOT_BOSSPULLBACKREGISTRY_H

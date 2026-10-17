@@ -353,6 +353,7 @@ public:
             { "wing",   HandleWing,   SEC_PLAYER, Console::No },
             { "config", HandleConfig, SEC_PLAYER, Console::No },
             { "spectate", HandleSpectate, SEC_PLAYER, Console::No },
+            { "unlock", HandleUnlock, SEC_GAMEMASTER, Console::No },
             { "test",   dcTestTable },
             { "dungeonqueuefill", dcQueueFillTable },
             { "bgqueuefill", dcBgQueueFillTable },
@@ -367,6 +368,59 @@ public:
     static bool HandleOn(ChatHandler* handler, Optional<std::string> wing) { return RunDcCommand(handler, "dc on", wing ? *wing : ""); }
     static bool HandleOff(ChatHandler* handler)    { return RunDcCommand(handler, "dc off"); }
     static bool HandleSkip(ChatHandler* handler)   { return RunDcCommand(handler, "dc skip"); }
+
+    // `.dc unlock` — clear every saved instance, RAID LOCKOUTS INCLUDED, for the
+    // issuing GM and every online member of their group, so the same raid can be
+    // run again at once. A testing tool: the client's own "reset instances" never
+    // touches a raid save, and a bot keeps its own permanent bind, so unbinding
+    // the leader alone would send the bots back into the old, cleared instance.
+    //
+    // Refused while anyone concerned stands inside an instance: unbinding a
+    // player from the map they are in starts the core's eject timer on them.
+    // The two message prefixes are read by the AzParty add-on — keep them.
+    static bool HandleUnlock(ChatHandler* handler)
+    {
+        Player* gm = handler->GetSession() ? handler->GetSession()->GetPlayer() : nullptr;
+        if (!gm)
+            return false;
+
+        std::vector<Player*> who{gm};
+        if (Group* group = gm->GetGroup())
+            for (GroupReference* ref = group->GetFirstMember(); ref; ref = ref->next())
+                if (Player* member = ref->GetSource(); member && member != gm)
+                    who.push_back(member);
+
+        for (Player* player : who)
+        {
+            if (player->IsInWorld() && player->GetMap() && player->GetMap()->Instanceable())
+            {
+                handler->PSendSysMessage("DC unlock: refused - {} is still inside an instance.", player->GetName());
+                return true;
+            }
+        }
+
+        uint32 cleared = 0;
+        uint32 characters = 0;
+        for (Player* player : who)
+        {
+            uint32 mine = 0;
+            for (uint8 i = 0; i < MAX_DIFFICULTY; ++i)
+            {
+                BoundInstancesMap const& binds = sInstanceSaveMgr->PlayerGetBoundInstances(player->GetGUID(), Difficulty(i));
+                while (!binds.empty())
+                {
+                    sInstanceSaveMgr->PlayerUnbindInstance(player->GetGUID(), binds.begin()->first, Difficulty(i), true, player);
+                    ++mine;
+                }
+            }
+            cleared += mine;
+            if (mine)
+                ++characters;
+        }
+
+        handler->PSendSysMessage("DC unlock: cleared {} saved instance(s) across {} character(s).", cleared, characters);
+        return true;
+    }
     static bool HandlePause(ChatHandler* handler)  { return RunDcCommand(handler, "dc pause"); }
     static bool HandlePull(ChatHandler* handler, Optional<std::string> param) { return RunDcCommand(handler, "dc pull", param ? *param : ""); }
     static bool HandleStatus(ChatHandler* handler, Optional<std::string> param) { return RunDcCommand(handler, "dc status", param ? *param : ""); }

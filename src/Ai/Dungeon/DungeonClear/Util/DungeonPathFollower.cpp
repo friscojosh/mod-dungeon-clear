@@ -399,9 +399,9 @@ namespace
             return true;
 
         dtQueryFilterExt filter;
-        filter.setIncludeFlags(static_cast<uint16>(NAV_GROUND | NAV_WATER | NAV_MAGMA));
+        filter.setIncludeFlags(DungeonClearGeometry::WALKABLE_NAV_FLAGS);
         filter.setExcludeFlags(0);
-        DungeonClearGeometry::ApplyLiquidAreaCosts(filter);
+        DungeonClearGeometry::ApplyTerrainAreaCosts(filter);
 
         // Detour is {y, z, x}.
         float const start[VERTEX_SIZE] = { bot->GetPositionY(), bot->GetPositionZ(),

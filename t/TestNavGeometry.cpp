@@ -690,3 +690,17 @@ TEST(DcAnchoredHopsTest, PendingOnlyForAnchoredHopsAheadOfTheCursor)
     // No route: nothing pending.
     EXPECT_FALSE(DcEngageGeometry::AnchoredHopsPendingWith({}, 0, from(0.0f)));
 }
+
+#include "Ai/Dungeon/DungeonClear/Util/DungeonClearGeometry.h"
+
+TEST(DcNavGeometry, WalkableFlagsAcceptSteepGround)
+{
+    // Every DC navmesh filter includes these; dropping NAV_GROUND_STEEP would make
+    // every tagged ramp impassable to routes and to snapping.
+    constexpr uint16 f = DungeonClearGeometry::WALKABLE_NAV_FLAGS;
+    EXPECT_TRUE(f & NAV_GROUND);
+    EXPECT_TRUE(f & NAV_GROUND_STEEP);
+    EXPECT_TRUE(f & NAV_WATER);
+    EXPECT_TRUE(f & NAV_MAGMA);
+    EXPECT_FALSE(f & NAV_SLIME);   // slime stays excluded, as for players
+}

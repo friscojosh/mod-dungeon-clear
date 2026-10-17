@@ -327,11 +327,11 @@ LongRangePathfinder::RawResult LongRangePathfinder::BuildCoreFromMesh(
     // the fence exists to keep routes out of a bad spot, not to strand a party
     // that is already standing in one (see DcRouteFilter's header).
     DcRouteFilter filter(mapId, sx, sy, sz, runWing);
-    filter.setIncludeFlags(static_cast<uint16>(NAV_GROUND | NAV_WATER | NAV_MAGMA));
+    filter.setIncludeFlags(DungeonClearGeometry::WALKABLE_NAV_FLAGS);
     filter.setExcludeFlags(0);
     // Prefer land: water/magma stay traversable but cost more, so the A* corridor
     // only dips into liquid when no near-as-short dry route exists.
-    DungeonClearGeometry::ApplyLiquidAreaCosts(filter);
+    DungeonClearGeometry::ApplyTerrainAreaCosts(filter);
 
     // Detour coordinate order is {y, z, x}.
     float const startPt[VERTEX_SIZE] = { sy, sz, sx };

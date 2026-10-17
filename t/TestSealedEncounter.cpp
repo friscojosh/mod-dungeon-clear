@@ -164,3 +164,29 @@ TEST(SealedEncounterTest, AnubarakArenaIsSealed)
                                                           551.0f, 248.3f, 224.0f));
 }
 
+
+TEST(SealedEncounterTest, DrakkisathMustersThePartyBeforeAnyGuardIsTouched)
+{
+    // Drakkisath and both Chromatic Elite Guards are one creature formation, so
+    // the first guard touched is the boss pull. The clump has to arm before the
+    // tank reaches the distance it drew him from live (19.2yd at (29.0,-303.7)).
+    SealedEncounterRow const* row = SealedEncounterRegistry::Find(229, 10363);
+    ASSERT_NE(row, nullptr);
+    float const bx = 36.5f, by = -286.0f, bz = 111.0f;
+    EXPECT_EQ(row->musterSpread, 10.0f);
+    EXPECT_TRUE(SealedEncounterRegistry::InApproachRange(*row, 29.0f, -303.7f, 110.9f, bx, by, bz));
+    // Armed with room to gather: 35yd out on his floor is already inside the range.
+    EXPECT_TRUE(SealedEncounterRegistry::InApproachRange(*row, bx, by - 35.0f, bz, bx, by, bz));
+
+    // Both guards and the tank's live pull spot are inside the hall volume.
+    EXPECT_TRUE(SealedEncounterRegistry::InSealedRoom(*row, 31.7f, -293.8f, 110.9f));
+    EXPECT_TRUE(SealedEncounterRegistry::InSealedRoom(*row, 30.8f, -278.4f, 110.9f));
+    EXPECT_TRUE(SealedEncounterRegistry::InSealedRoom(*row, 29.0f, -303.7f, 110.9f));
+
+    // The UBRS Rookery floor runs under the hall at z 91-97; it is never "inside".
+    EXPECT_FALSE(SealedEncounterRegistry::InSealedRoom(*row, 60.0f, -280.0f, 93.0f));
+
+    // Other Blackrock Spire bosses are not registered.
+    EXPECT_EQ(SealedEncounterRegistry::Find(229, 10430), nullptr);  // The Beast
+    EXPECT_EQ(SealedEncounterRegistry::Find(229, 10429), nullptr);  // Rend
+}

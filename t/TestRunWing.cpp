@@ -5,6 +5,7 @@
 
 #include "gtest/gtest.h"
 
+#include <algorithm>
 #include <string>
 #include <vector>
 
@@ -82,7 +83,12 @@ TEST(DcRunWingTest, BlackrockSpireIsAnExplicitTwoWingLayout)
     EXPECT_EQ(lbrs->terminalBossEntry, 9568u);    // Overlord Wyrmthalak
     EXPECT_EQ(ubrs->terminalBossEntry, 10363u);   // General Drakkisath
     EXPECT_EQ(lbrs->bossEntries.size(), 9u);      // incl. Urok, Gizrul
-    EXPECT_EQ(ubrs->bossEntries.size(), 5u);      // incl. Solakar
+    EXPECT_EQ(ubrs->bossEntries.size(), 16u);     // incl. Solakar + 11 objectives (stadium, hall registration, 7 runes, altar, Beast approach)
+    // The Rend/Gyth stadium objective (OBJ(1), fork: friscojosh) must be a UBRS
+    // entry, or FilterToWing drops it and the clear routes to the balcony Rend.
+    EXPECT_NE(std::find(ubrs->bossEntries.begin(), ubrs->bossEntries.end(),
+                        BossRosterRegistry::ObjectiveEntry(1)),
+              ubrs->bossEntries.end());
 
     // The DBC bits split cleanly: 0-8 LBRS, 9-13 UBRS.
     EXPECT_EQ(lbrs->encounterMask & ubrs->encounterMask, 0u);
@@ -264,7 +270,7 @@ TEST(DcRunWingTest, EntrancePatrolPrerequisiteBelongsOnlyToDireMaulNorth)
     ASSERT_NE(layout, nullptr);
     auto const roster = BossRosterRegistry::Apply(429, DcDiffKey::Dungeon(DUNGEON_DIFFICULTY_NORMAL),
                                                  {Boss(14326, 1, 410.711f, -3.15041f, -24.558f, 429)});
-    uint32 const patrol = BossRosterRegistry::ObjectiveEntry(15);
+    uint32 const patrol = BossRosterRegistry::ObjectiveEntry(24);
     for (auto const& wing : layout->wings)
     {
         auto const filtered = DcRunWing::FilterToWing(roster, wing);
@@ -489,4 +495,23 @@ TEST(DcRunWingTest, BaelGarCompletesTheDetentionBlockAndThaurissanTheUpperCity)
     EXPECT_TRUE(DcRunWing::TerminalDone(uc, ucList, 1u << 18, false));
     // Bael'Gar is not in an Upper City list.
     EXPECT_FALSE(DcRunWing::TerminalDone(db, ucList, 1u << 8, true));
+}
+
+// Follower gap-closer veto (fork: friscojosh): the name classifier behind it.
+#include "Ai/Dungeon/DungeonClear/Util/DcGapCloser.h"
+
+TEST(DcGapCloserTest, ClassifiesGapClosersAndNothingElse)
+{
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("charge"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("intercept"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("intercept on enemy healer"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("feral charge - bear"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("feral charge - cat"));
+    EXPECT_TRUE(DcGapCloser::IsGapCloser("death grip"));
+
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("intervene"));       // to an ally
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("heroic strike"));
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("chargeup"));         // prefix, not the spell
+    EXPECT_FALSE(DcGapCloser::IsGapCloser("dps assist"));
+    EXPECT_FALSE(DcGapCloser::IsGapCloser(""));
 }

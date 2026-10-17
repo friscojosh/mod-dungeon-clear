@@ -13,6 +13,7 @@
 #include <vector>
 
 #include "Ai/Dungeon/DungeonClear/Data/DungeonBossInfo.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 #include "Ai/Dungeon/DungeonClear/Data/DcEventDoorRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonEventRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Data/DungeonClearRouteRegistry.h"
@@ -525,6 +526,18 @@ TEST(DungeonEventIntegrityTest, AnchoredEventsAreWiredByExactlyOneObjective)
             if (patch.mapId != ev.mapId)
                 continue;
             for (DungeonBossInfo const& e : patch.add)
+                if (e.kind == DungeonAnchorKind::Objective && e.eventId == ev.id)
+                    ++refs;
+        }
+        // Tribute is a selected variant rather than a global roster patch.
+        // Count its actual generated anchors too; do not exempt its events
+        // from the exactly-one-reference invariant.
+        if (ev.mapId == DcDireMaulTribute::MAP)
+        {
+            DungeonBossInfo king;
+            king.entry = DcDireMaulTribute::KING;
+            king.mapId = DcDireMaulTribute::MAP;
+            for (DungeonBossInfo const& e : DcDireMaulTribute::BuildRoster({king}))
                 if (e.kind == DungeonAnchorKind::Objective && e.eventId == ev.id)
                     ++refs;
         }
@@ -1273,6 +1286,11 @@ TEST(DungeonEventIntegrityTest, StepsOwnMovementIsConfinedToVettedEvents)
 {
     struct Row { uint32 mapId; uint32 eventId; };
     static constexpr Row kVetted[] = {
+        // Dire Maul Tribute dialogue hooks approach Mizzle and Kromcrush
+        // themselves; the follower hold anchor is intentionally outside gossip
+        // range. Their first Custom step must keep driving beyond that anchor.
+        {429, DcDireMaulTribute::CLAIM_EVENT},
+        {429, DcDireMaulTribute::DISGUISE_EVENT},
         // Black Morass "Defend Medivh": hook 8 walks the tank into Medivh's 20yd
         // start trigger and holds the Medivh-side hold point, both through the
         // long-haul spline funnel (the portals and the hold point are 80-102yd

@@ -5,9 +5,11 @@
 
 #include "DungeonClearMultiplier.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 
 #include "Action.h"
 #include "FollowActions.h"
+#include "GenericSpellActions.h"
 #include "InstanceScript.h"
 #include "Player.h"
 #include "Playerbots.h"
@@ -18,6 +20,8 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcBossStandDown.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcEscapeLeap.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcFlightLeg.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcGapCloser.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcLeaderSignal.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcOculusPlan.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcSmartRest.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearUtil.h"
@@ -174,6 +178,26 @@ static bool OculusDrakeAttackUnsafe(Player* bot, PlayerbotAI* botAI, AiObjectCon
     return target && !DcFlightLeg::IsFlyingSafe(target);
 }
 
+// FOLLOWER GAP-CLOSERS (fork: friscojosh). While a dungeon-clear run is active,
+// a party member other than the DC tank never uses a gap-closer: Charge and
+// Intercept (warrior), Feral Charge (druid) or Death Grip (death knight). Each
+// covers up to 25-30yd in a straight line at the bot's own target, so the bot
+// lands wherever that mob is standing — next to the pack beside it, or halfway
+// back down the tank's drag lane — and the new neighbours join (live, UBRS's
+// Furnace: the warrior Charged the tank's pull and brought adds). Death Grip is
+// the same problem the other way round: it yanks a mob to the bot off its pack.
+// The follower walks into the tank's fight instead, which is where the camp and
+// the pull machinery already put it. Intervene (to an ally) is not on the list.
+// Gated like the follow-master block below: the cross-bot PartyTank value, so it
+// holds for every member of an unpaused run and lifts when the run is off/paused.
+static bool FollowerGapCloserBanned(Player* bot, AiObjectContext* context, std::string const& name)
+{
+    if (!DcGapCloser::IsGapCloser(name))
+        return false;
+    Player* tank = context->GetValue<Player*>(DcKey::PartyTank)->Get();
+    return tank && tank != bot;
+}
+
 float DungeonClearMultiplier::GetValue(Action* action)
 {
     if (!action || !botAI || !bot)
@@ -195,6 +219,10 @@ float DungeonClearMultiplier::GetValue(Action* action)
     if (OculusMountBanned(bot, name))
         return 0.0f;
     if (OculusDrakeAttackUnsafe(bot, botAI, context, name))
+        return 0.0f;
+
+    // Stock class actions, so above the fast path. See FollowerGapCloserBanned.
+    if (FollowerGapCloserBanned(bot, context, name))
         return 0.0f;
 
     // Rest-target cap. Applies to EVERY bot in an active DC run — the leader tank
@@ -364,10 +392,53 @@ float DungeonClearMultiplier::GetValue(Action* action)
     return 1.0f;
 }
 
+// A PULL-BACK OR SCRIPTED DRAG ALREADY IN FLIGHT is finished, stand-down or not.
+//
+// The stand-down zeroes the pull maneuver so a raid boss fight is never steered by
+// a trash-pull FSM. But a BossPullbackRegistry drag IS the opening of the boss
+// fight, and it puts the raid in a state only the maneuver can undo: the party is
+// held PASSIVE at the anchor (GetLeaderPullInfo / GetLeaderCampHold accept
+// `bossPullback` in place of the pull-mode bool, so the stand-down lowering that
+// bool does not release them), while the tank is out on the boss. The tag lands,
+// the boss is in combat with a member, the stand-down enters on that same tick --
+// and with the maneuver inert nothing drags him home and nothing ever releases the
+// raid: the tank fights where it tagged, alone, 57yd from forty bots told to stand
+// still. That is Majordomo's row as first written (never run live) and it would be
+// Baron Geddon's.
+//
+// A scripted stage holds the party the same way (`scriptedStage >= 0`), and a
+// roster boss can join one mid-drag -- Geddon's patrol passes 9yd from one of his
+// own stages -- so it gets the same answer.
+//
+// Narrow on purpose: only the maneuver, only for those two kinds of pull, and only
+// while the phase is still holding the party (Forming / Advancing / Returning).
+// The moment the drag releases at camp the flag clears and the fight is the raid
+// strategy's, exactly as the stand-down intends. An ordinary advanced trash pull is
+// NOT exempt: there the stand-down lowers the pull-mode bool, which releases the
+// followers, so fighting in place is safe and is what the contract asks for.
+static bool HeldDragInFlight(AiObjectContext* context, std::string const& name)
+{
+    if (name != "dungeon clear pull maneuver")
+        return false;
+    DcPullContext const& pull =
+        context->GetValue<DcPullContext&>(DcKey::PullContext)->Get();
+    if (!pull.bossPullback && pull.scriptedStage < 0)
+        return false;
+    return DcLeaderSignal::IsPullPhaseHolding(static_cast<uint32>(pull.phase));
+}
+
 float DungeonClearCombatMultiplier::GetValue(Action* action)
 {
     if (!action || !botAI || !bot)
         return 1.0f;
+
+    // Excluding a boss as a primary target does not protect it from splash
+    // damage aimed at nearby trash or the King. Tribute uses single-target
+    // combat throughout, including the tank's rotation. Healing also produces
+    // AoE threat in Playerbots; it must remain available to keep the party alive.
+    if (DcDireMaulTribute::Enabled(bot) && action->getThreatType() == Action::ActionThreatType::Aoe &&
+        !dynamic_cast<CastHealingSpellAction*>(action))
+        return 0.0f;
 
     std::string const& name = action->getName();
 
@@ -396,6 +467,10 @@ float DungeonClearCombatMultiplier::GetValue(Action* action)
     if (OculusDrakeAttackUnsafe(bot, botAI, context, name))
         return 0.0f;
 
+    // Stock class actions, so above the fast path. See FollowerGapCloserBanned.
+    if (FollowerGapCloserBanned(bot, context, name))
+        return 0.0f;
+
     // RAID BOSS STAND-DOWN — the one shared check that makes every DC combat
     // trigger node inert during a raid encounter, instead of a copy in each of
     // the ~12 triggers. While DcBossStandDown reads active, a "dungeon clear *"
@@ -413,6 +488,11 @@ float DungeonClearCombatMultiplier::GetValue(Action* action)
         return 1.0f;
     if (DcBossStandDown::IsActive(bot))
     {
+        // See HeldDragInFlight: the one DC rung that must outlive the stand-down,
+        // because it is the only thing that can release a raid it is holding.
+        if (HeldDragInFlight(context, name))
+            return 1.0f;
+
         switch (DcBossStandDown::ClassifyAction(name, isDcAction))
         {
             case DcBossStandDown::ActionVerdict::Stock:

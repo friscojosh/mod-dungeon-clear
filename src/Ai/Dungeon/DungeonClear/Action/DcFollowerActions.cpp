@@ -63,6 +63,7 @@
 #include "Ai/Dungeon/DungeonClear/Data/ScriptedPullRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTargeting.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcTickMemo.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearTuning.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonClearUtil.h"
@@ -244,6 +245,23 @@ bool DungeonClearFollowTankAction::Execute(Event /*event*/)
             DcFollowerLifecycle::UnmarkFollowing(bot->GetGUID());
         }
         return false;
+    }
+
+    // The tribute interactor must approach alone. This fixed hold replaces
+    // MoveFollow before it can carry an undisguised follower into a guard.
+    float tributeX = 0.0f, tributeY = 0.0f, tributeZ = 0.0f;
+    if (DcDireMaulTribute::FollowerHoldPoint(bot, tributeX, tributeY, tributeZ))
+    {
+        followedTank = tank->GetGUID();
+        DcFollowerLifecycle::MarkFollowing(bot->GetGUID());
+        if (bot->GetExactDist(tributeX, tributeY, tributeZ) <= 4.0f)
+        {
+            DcMovement::StopBot(bot, DcMovement::Stop::Hold);
+            return true;
+        }
+        if (bot->GetMotionMaster()->GetCurrentMovementGeneratorType() == FOLLOW_MOTION_TYPE)
+            DcMovement::StopBot(bot, DcMovement::Stop::Hold);
+        return DcMoveTo(bot->GetMapId(), tributeX, tributeY, tributeZ, false, false, false);
     }
 
     // Leader is dropping down a narrow one-way hole the followers can't path
@@ -976,7 +994,9 @@ bool DungeonClearCampHoldActionBase::Execute(Event /*event*/)
     // exactly right: the TANK's camp was the authored point, the party's was not.
     // While passive, therefore, they take the ordinary tight slot pin like any other
     // held follower, which is what puts them on the coordinate.
-    Position const slot = DcPullPlanner::ComputeCampSlot(bot, camp);
+    // A loose slot or reach extension exposes the trap pull around the wall.
+    bool const tributeTrap = DcDireMaulTribute::TrapPullActive(bot);
+    Position const slot = tributeTrap ? camp : DcPullPlanner::ComputeCampSlot(bot, camp);
     float const toCamp = bot->GetExactDist(&slot);
     // The scripted camp FIGHT — anchored, not held. Everything below that treats
     // "inside the radius" as "settled and waiting" is wrong here, because the bot is
@@ -994,8 +1014,8 @@ bool DungeonClearCampHoldActionBase::Execute(Event /*event*/)
     // kill order may have overridden it), so it is the only distance that decides
     // whether standing at the camp means fighting or watching. No target, a dead one,
     // or a keep-out room -> the plain leash, unchanged.
-    float followerLeash = DC_SCRIPTED_PULL_FOLLOWER_LEASH;
-    if (campFight && !inNoGoRoom)
+    float followerLeash = tributeTrap ? 3.0f : DC_SCRIPTED_PULL_FOLLOWER_LEASH;
+    if (campFight && !inNoGoRoom && !tributeTrap)
     {
         if (Unit* const fightTarget =
                 context->GetValue<Unit*>(DcKey::Stock::CurrentTarget)->Get())
@@ -1692,6 +1712,16 @@ bool DungeonClearHealRepositionAction::Execute(Event /*event*/)
         dx = close.GetPositionX();
         dy = close.GetPositionY();
         dz = close.GetPositionZ();
+
+        // The close-on point is not ring-sampled, so FindStandoffPoint's hazard
+        // screen never saw it. A healer that would have to step into a keep-out
+        // (a Rookery egg clutch) holds and heals what it can reach instead.
+        if (DcHazard::PointIsHot(bot, dx, dy, dz))
+        {
+            DC_PULL_TRACE("[DC:{}] heal reposition: close-on point is in a hazard keep-out "
+                          "-> holding", bot->GetName());
+            return false;
+        }
 
         // A leashed healer never takes the close past its leash: that walk is
         // exactly the one that carried it onto the Banquet Hall floor. Yield the

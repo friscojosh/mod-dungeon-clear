@@ -575,6 +575,13 @@ struct DcRunState
     // id, so a new instance reads it as unset without anyone clearing it.
     DcRunWing::Latch runWing;
 
+    // Tribute is a choice for this run in this instance, not a map-wide flag.
+    // Unlike the wing preference it is cleared by full run teardown.
+    bool direMaulTribute = false;
+    uint32 tributeInstanceId = 0;
+    uint32 tributeHoldEvent = 0;
+    std::string tributeFailureReason;
+
     // --- per-bot throttles (see Util/DcThrottle.h) --------------------------
 
     DcThrottleSlot throttles[kDcThrottleCount]{};

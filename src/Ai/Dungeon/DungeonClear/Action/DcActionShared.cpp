@@ -4,6 +4,7 @@
  */
 
 #include "DungeonClearActions.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcHazard.h"
 #include "Ai/Dungeon/DungeonClear/Data/HealLeashRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
 #include "TestRun/DcTestRunManager.h"
@@ -925,6 +926,15 @@ bool DcMovementAction::FindStandoffPoint(Map* map, Position const& center, float
         DungeonClearMath::StandoffCandidates(center, bot->GetPosition(), ringRadius,
                                              /*ringPoints*/ 7);
 
+    // Never stand in, or walk through, a registered hazard's keep-out. Without this
+    // a healer keeping the tank in range picked ring points in the middle of the
+    // UBRS Rookery egg clutches and hatched them. Sampled once: nothing in this
+    // loop moves a hazard. A bot already inside a keep-out is allowed the first
+    // leg out of it — a fence is about where routes GO, never a cage.
+    DcHazard::LiveSet const live = DcHazard::Sample(bot);
+    bool const startHot = !live.empty() &&
+        DcHazard::PointIsHot(live, bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ());
+
     constexpr float kEyeBump = 2.0f;  // eye height for the LOS ray (cf. ChordClear)
     for (Position const& c : cands)
     {
@@ -944,6 +954,9 @@ bool DcMovementAction::FindStandoffPoint(Map* map, Position const& center, float
                                             snap.x, snap.y))
             continue;
 
+        if (!live.empty() && DcHazard::PointIsHot(live, snap.x, snap.y, snap.z))
+            continue;
+
         if (!map->isInLineOfSight(snap.x, snap.y, snap.z + kEyeBump, cx, cy,
                                   cz + kEyeBump, bot->GetPhaseMask(),
                                   LINEOFSIGHT_CHECK_VMAP,
@@ -954,6 +967,23 @@ bool DcMovementAction::FindStandoffPoint(Map* map, Position const& center, float
         gen.CalculatePath(snap.x, snap.y, snap.z, /*forceDest*/ false);
         if (gen.GetPathType() != PATHFIND_NORMAL)
             continue;
+
+        // Consecutive corner pairs, not vertices: PathGenerator string-pulls, so an
+        // open-floor walk is often just {start, end} (see DcHazard::SegmentIsHot).
+        if (!live.empty())
+        {
+            Movement::PointsArray const& pts = gen.GetPath();
+            bool hot = false;
+            for (size_t i = 1; i < pts.size() && !hot; ++i)
+            {
+                if (i == 1 && startHot)
+                    continue;
+                hot = DcHazard::SegmentIsHot(live, pts[i - 1].x, pts[i - 1].y, pts[i - 1].z,
+                                             pts[i].x, pts[i].y, pts[i].z);
+            }
+            if (hot)
+                continue;
+        }
 
         x = snap.x;
         y = snap.y;

@@ -166,6 +166,12 @@ namespace DcHazard
 
     using LiveSet = std::vector<LiveHazard>;
 
+    // Whether a trap row's active vacate applies to this bot. A row flagged
+    // vacateRangedOnly (the Rookery eggs) drives only ranged bots and healers off
+    // it; tanks and melee keep the placement keep-out but are never pushed off
+    // their target. Pure, so the rule is unit-testable apart from Sample().
+    bool TrapVacatesFor(bool rowRangedOnly, bool botIsRangedOrHealer);
+
     // Resolve every live hazard around `bot` into one flat set, in registry order
     // (creature emitters, then ground pools, then traps) so NearestVacate's
     // nearest-wins tie-break is unchanged. Empty — and free — on a map with no

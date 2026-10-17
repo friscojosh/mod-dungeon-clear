@@ -607,7 +607,16 @@ namespace
     // There is no GAMEOBJECT_TYPE_TRAP on map 658 and no creature on it carries a
     // permanent aura in creature_template_addon, so map 658 needs neither a
     // DcTrapHazard nor a DcHazardEmitter row.
-    constexpr std::array<DcGroundHazard, 12> kGroundHazards = {{
+    //
+    // Molten Core (map 409), spell 19717 "Rain of Fire" -- Gehennas'. A persistent area aura
+    // (SPELL_EFFECT_PERSISTENT_AREA_AURA, 10yd, 6s, ~1000 fire every 2s) dropped on a random
+    // raid member, and recast every 6s: for the whole fight there is one burning somewhere,
+    // under the tank and the melee as readily as under a healer. Nothing to fight and nothing
+    // to interrupt; the answer is to walk out, tank and all, and let him be dragged with it.
+    //
+    // vacate 10 is the aura; hold 2 reads in danger inside 12yd; slack 6 aims the step at
+    // 16yd, outside the 13yd placement radius.
+    constexpr std::array<DcGroundHazard, 13> kGroundHazards = {{
         //                   radius  zBand  vacate  hold  slack
         // Cloud of Disease — the pool a dying Diseased Ghoul (10495) leaves.
         { 289, 17742, 8.0f, 6.0f, 5.0f, 2.0f, 6.0f },
@@ -639,6 +648,8 @@ namespace
         // pool lands under a party that is camped on the altar by a 70.5yd leash
         // and cannot simply relocate, so the answer is a step, not a move.
         { 668, 72362, 6.0f, 6.0f, 3.0f, 2.0f, 6.0f },
+        // Rain of Fire -- Gehennas', on a random raid member every 6s.
+        { 409, 19717, 13.0f, 6.0f, 10.0f, 2.0f, 6.0f },
     }};
 
     // ---- the trap table --------------------------------------------------
@@ -693,10 +704,58 @@ namespace
     // Guard (17461 normal, SmartAI on-death SetData 2) or Porung (20923 heroic,
     // boss_porung::JustDied) cancels the scout's whole scheduler — waves and
     // arrows together. See ShatteredHallsEvents.cpp, which sequences exactly that.
-    constexpr std::array<DcTrapHazard, 1> kTrapHazards = {{
-        //                   radius  zBand  vacate  hold  slack
+    // Blackrock Spire (map 229), gameobject 175124 "Rookery Egg" — 222 spawns,
+    // 149 of them in the UBRS Rookery (x 49-108, y -338..-247, z 91-97) laid in
+    // tight clutches (median nearest-neighbour 1.9yd), the rest round the stadium
+    // rim at z 111. gameobject_template: type 6 (TRAP), Data2 diameter 3, Data3
+    // spell 15745 "Summon Rookery Whelp", Data4 type 1 (spent on firing). So any
+    // player who steps within ~1.5yd (plus body reach) of an egg hatches a whelp,
+    // and walking through a clutch hatches the clutch. A healer repositioning to
+    // keep the tank in range used to stand right in one.
+    //
+    // radius 4: the trigger plus ~2.5yd margin. Measured on the spawn data it
+    // covers ~48% of the Rookery's bounding box, i.e. the clutches and not the
+    // open floor between them, so a standoff point is still always available.
+    // vacate 2 (the trigger reach) + hold 2 = in danger inside 4yd, matching the
+    // placement radius; slack 4.5 aims the step-back at 6.5yd, outside `radius`.
+    // Ranged-only vacate: the melee fight the hatchlings where they stand.
+    // Molten Core (map 409), gameobject 178164 "Hot Coal" — ONE spawn (guid 247) at
+    // (736.7,-1176.3,-118.1): the coal pit in the middle of Majordomo Executus'
+    // chamber, 23yd from MajordomoSummonPos. gameobject_template: type 6 (TRAP),
+    // Data2 diameter 10 (a 5yd trigger), Data3 spell 20533, permanent. It is where
+    // his two Teleports (20618 random target, 20534 his victim) drop people, and it
+    // sits between the door and the eight adds, so the raid fights and then rests,
+    // loots and resurrects on top of it. Nothing drove anyone off: the playerbots
+    // `moltencore` strategy only flees LIQUID lava (McInLavaTrigger), and this is a
+    // gameobject. Live 2026-10-06 the raid stood in it through the fight and after.
+    //
+    // (Not to be confused with 177000, also "Hot Coal", 0.3yd away: that one is the
+    // decorative DOOR-typed prop DcEventDoorRegistry hides from navigation.)
+    //
+    // vacate 6 = the trigger reach plus a body; hold 2 = in danger inside 8yd; slack
+    // 6 aims the step-out at 12yd, outside the 9yd placement radius. Everyone
+    // leaves, melee included: the adds are tanked wherever the tank stands, and a
+    // teleported victim has to walk out whatever its role.
+    //
+    // Molten Core again, gameobject 177704 "Lava Bomb" -- the fire patch Magmadar's two Lava
+    // Bombs (19411 on someone within 10yd of him, 20474 on someone farther) leave under their
+    // target, each every 12-15s. gameobject_template: type 6 (TRAP), Data2 diameter 5, Data3
+    // spell 19428 "Conflagration" (400 fire a second for 8s, 5yd). The melee one lasts 30s and
+    // the ranged one 60s, so several are alive at once and one is usually under the tank.
+    //
+    // vacate 5 (the spell's own radius) + hold 2 = in danger inside 7yd, matching the
+    // placement radius; slack 6 aims the step at 11yd. Everyone leaves, the tank included --
+    // "tank him where he stands and move only for a Lava Bomb" is the whole positional fight.
+    constexpr std::array<DcTrapHazard, 4> kTrapHazards = {{
+        //                   radius  zBand  vacate  hold  slack  rangedOnly
         // Blaze — the 60s fire patch a flame arrow leaves on the gauntlet floor.
-        { 540, 181915, 5.0f, 6.0f, 3.5f, 2.0f, 6.0f },
+        { 540, 181915, 5.0f, 6.0f, 3.5f, 2.0f, 6.0f, false },
+        // Rookery Egg — hatches a whelp on anyone within reach.
+        { 229, 175124, 4.0f, 4.0f, 2.0f, 2.0f, 4.5f, true },
+        // Hot Coal — the fire pit in Majordomo Executus' chamber.
+        { 409, 178164, 9.0f, 6.0f, 6.0f, 2.0f, 6.0f, false },
+        // Lava Bomb -- the fire patch under whoever Magmadar bombed.
+        { 409, 177704, 7.0f, 6.0f, 5.0f, 2.0f, 6.0f, false },
     }};
 }
 

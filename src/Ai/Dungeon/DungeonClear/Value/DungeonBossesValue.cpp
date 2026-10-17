@@ -15,6 +15,7 @@
 #include "Ai/Dungeon/DungeonClear/Data/DungeonWingRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Overrides/BossRosterRegistry.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRunWing.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 #include "Ai/Dungeon/DungeonClear/Util/NavmeshSnap.h"
 #include "Playerbots.h"
 
@@ -245,5 +246,8 @@ std::vector<DungeonBossInfo> DungeonBossesValue::Calculate()
     if (!map || !map->IsDungeon())
         return {};
 
-    return SnapAll(map, FilterToCurrentWing(bot, bot->GetMapId(), BuildRoster(bot)));
+    auto roster = FilterToCurrentWing(bot, bot->GetMapId(), BuildRoster(bot));
+    if (DcDireMaulTribute::Enabled(bot))
+        roster = DcDireMaulTribute::BuildRoster(roster);
+    return SnapAll(map, std::move(roster));
 }

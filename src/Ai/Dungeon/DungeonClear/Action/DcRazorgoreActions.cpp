@@ -11,6 +11,7 @@
 #include "Log.h"
 #include "MotionMaster.h"
 #include "Player.h"
+#include "Pet.h"
 #include "PlayerbotAI.h"
 #include "Spell.h"
 #include "Playerbots.h"
@@ -24,6 +25,8 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcMovement.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRazorgoreDecision.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcRun.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
+#include "DcActionShared.h"
 #include "Ai/Dungeon/DungeonClear/Util/DungeonPathFollower.h"
 #include "Ai/Dungeon/DungeonClear/Util/LongRangePathfinder.h"
 #include "Ai/Dungeon/DungeonClear/DcValueKeys.h"
@@ -423,6 +426,15 @@ bool DungeonClearHoldFireTrigger::IsActive()
     if (!DcTargetExclusionRegistry::HasRowsFor(bot->GetMapId()))
         return false;
 
+    if (DcDireMaulTribute::Enabled(bot))
+    {
+        if (!DcRun::Of(context).tributeFailureReason.empty())
+            return true;
+        if (Pet* pet = bot->GetPet())
+            if (BarredRightNow(bot, pet->GetVictim()))
+                return true;
+    }
+
     // NO BLANKET TANK EXEMPTION — it lives inside BarredRightNow now, keyed on the
     // row's own alsoTank flag. See the note there.
     return BarredRightNow(bot, bot->GetVictim()) ||
@@ -434,13 +446,32 @@ bool DungeonClearHoldFireAction::Execute(Event /*event*/)
     if (!bot || !botAI)
         return false;
 
+    if (DcDireMaulTribute::Enabled(bot))
+    {
+        std::string const reason = DcRun::Of(context).tributeFailureReason;
+        if (!reason.empty())
+        {
+            DcActionShared::DisableDungeonClear(botAI, reason);
+            DcMovement::StopBot(bot, DcMovement::Stop::Hold);
+            return true;
+        }
+    }
+    bool stoppedPet = false;
+    if (DcDireMaulTribute::Enabled(bot))
+        if (Pet* pet = bot->GetPet())
+            if (BarredRightNow(bot, pet->GetVictim()))
+            {
+                botAI->PetFollow();
+                stoppedPet = true;
+            }
+
     Unit* const victim = bot->GetVictim();
     Unit* const current = AI_VALUE(Unit*, DcKey::Stock::CurrentTarget);
 
     bool const barredVictim = BarredRightNow(bot, victim);
     bool const barredCurrent = BarredRightNow(bot, current);
     if (!barredVictim && !barredCurrent)
-        return false;  // raced away between the trigger and here — nothing to do
+        return stoppedPet;  // the pet may have been the only barred attacker
 
     Unit* const barred = barredVictim ? victim : current;
 

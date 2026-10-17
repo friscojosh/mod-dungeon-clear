@@ -1367,11 +1367,11 @@ void DcTestRunJob::TickStarting()
         return;
     }
 
-    if (!_dcOnIssued)
+    auto captureRoster = [&](std::vector<DungeonBossInfo> const& roster)
     {
-        _record.instanceId = tank->GetMap()->GetInstanceId();
         _roster.clear();
-        for (DungeonBossInfo const& b : bosses)
+        _record.bossRoster.clear();
+        for (DungeonBossInfo const& b : roster)
         {
             BossRef ref;
             ref.entry = b.entry;
@@ -1385,6 +1385,12 @@ void DcTestRunJob::TickStarting()
                 _record.bossRoster.push_back(ref.name);
         }
         _record.bossesTotal = static_cast<uint32>(_roster.size());
+    };
+
+    if (!_dcOnIssued)
+    {
+        _record.instanceId = tank->GetMap()->GetInstanceId();
+        captureRoster(bosses);
 
         // SCENARIO: the run is scoped to its focus. Every focus entry must be
         // on this map's live roster — the registry gtest can only check the
@@ -1465,6 +1471,12 @@ void DcTestRunJob::TickStarting()
     tankAI->DoSpecificAction("dc on", Event("dc", "", FindGm()), true);
     if (DcRun::Of(ctx).enabled)
     {
+        // Starting DC can select a route variant (for example DM Tribute).
+        // Capture the committed route, not the ordinary roster read before on.
+        // Scenarios retain their explicitly validated focus and count above.
+        if (!_isScenario)
+            captureRoster(ctx->GetValue<std::vector<DungeonBossInfo>>(DcKey::DungeonBosses)->Get());
+
         if (_isScenario)
         {
             // Take the run-instance transition NOW, before filling Skipped. It

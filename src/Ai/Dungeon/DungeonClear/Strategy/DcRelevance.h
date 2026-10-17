@@ -202,6 +202,10 @@ namespace DcRel
     // tp-20260815-162044-2: Returning pinned 130-215s). 60 also clears the non-combat
     // ladder it lands in — above HazardVacate (55), below BreakStuckCombat (65).
     inline constexpr float PullManeuver           = 60.0f; // leader: drag the pack back to camp
+    // Leader: put the skull / moon down (fork: friscojosh). Above PullManeuver so the
+    // focus is marked the tick the tag lands, mid-drag; it claims a tick only when a
+    // mark is missing (see DcMarkTargets.h), so it never starves the maneuver.
+    inline constexpr float MarkTargets            = 60.5f;
     inline constexpr float StayAtCamp             = 60.0f; // follower: pin at camp (role peer of PullManeuver)
     // Survival: move OUT of an active-vacate hazard's pulse. Two shapes, one rung.
     // The Arcatraz "Destroyed Sentinel" (21761) is summoned on a Sentinel's death

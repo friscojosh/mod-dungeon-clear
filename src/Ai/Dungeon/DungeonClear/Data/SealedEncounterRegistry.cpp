@@ -221,6 +221,30 @@ namespace
     //
     // approachRadius 86. The door is 75.8yd from Prince; 8/10yd out along the
     // landing are ~84/86yd.
+    // --- Blackrock Spire (229) — General Drakkisath -----------------------------
+    //
+    // NOT door-sealed: instance_blackrock_spire's two Drakkisath doors are PASSAGE
+    // doors out the back toward Blackwing Lair. Registered for the same two gates
+    // anyway, because the encounter has the property they protect against: you
+    // cannot start it with part of the party, and the first touch IS the boss pull.
+    // creature_formations links Drakkisath (guid 137971) as leader of both Chromatic
+    // Elite Guards (90975 / 90976, ~9yd from him), groupAI 519, so engaging either
+    // guard engages all three. Live (2026-10-01 05:02:20): the tank, cleared by the
+    // generic 25yd spread gate, walked to a guard as a LEEROY trash pull with the
+    // healer and two DPS 37-45yd back; Drakkisath joined at 19yd and the party
+    // wiped inside 45s, the healer arriving after the tank was already low.
+    //
+    // Volume: Drakkisath's hall around his spawn (36.5, -286.0, 111.0), ±~30yd on
+    // its floor. Z band 104-118 keeps the UBRS Rookery floor (z 91-97, which runs
+    // under x 49-108) out of "inside".
+    //
+    // approachRadius 40: arms the clump well outside the trio's aggro reach (the
+    // tank drew Drakkisath at 19.2yd), so the hold happens where nothing can see
+    // it. 3D, but the Rookery corner below still falls inside 40yd — harmless,
+    // because the run only routes through the Rookery while Solakar (order 20) is
+    // the next objective, never Drakkisath (24).
+    //
+    // musterSpread 10, as every row here: follow-tank trails at <= 6yd.
     SealedEncounterRow const kRows[] =
     {
         // mapId  boss   minX    maxX    minY    maxY   approach  muster
@@ -232,6 +256,7 @@ namespace
         {   532, 16524, -11195.0f, -11135.0f, -1942.0f, -1886.0f, 50.0f, 10.0f, 225.0f, 245.0f },
         {   532, 15689, -11182.0f, -11058.0f, -1706.0f, -1550.0f, 107.0f, 10.0f, 276.0f, 284.0f },
         {   532, 15690, -11015.0f, -10900.0f, -2040.0f, -1935.0f,  86.0f, 10.0f, 272.0f, 280.0f },
+        {   229, 10363,     5.0f,     68.0f,  -318.0f,  -254.0f,  40.0f, 10.0f, 104.0f, 118.0f },
     };
 }
 

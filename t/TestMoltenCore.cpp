@@ -10,8 +10,9 @@
 #include "Ai/Dungeon/DungeonClear/Util/DcDifficulty.h"
 
 // Molten Core (map 409) — raid-support Plan E1 data. The eight statics derive
-// from BossSpawnIndex at runtime; these tests pin the authored finale: the two
-// script-summoned bosses and the Ragnaros summon event.
+// from BossSpawnIndex at runtime; these tests pin the authored finale — the two
+// script-summoned bosses and the Ragnaros summon event — and the one change to
+// the statics' order (Baron Geddon ahead of Shazzrah).
 
 namespace
 {
@@ -40,9 +41,27 @@ TEST(DcMoltenCoreTest, RosterAppendsTheFinaleInOrder)
         BossRosterRegistry::Apply(kMap, DcDiffKey::Raid(0), Statics());
     ASSERT_EQ(out.size(), 11u);
 
-    // The eight statics keep their derived order...
+    // The eight statics come first, in derived order EXCEPT that Baron Geddon
+    // (bit 5) is taken before Shazzrah (bit 4): Shazzrah stands across the cavern
+    // Geddon patrols, so Geddon has to be dead before the raid walks it.
+    uint32 const order[] = {12118, 11982, 12259, 12057, 12056, 12264, 12098, 11988};
     for (uint32 i = 0; i < 8; ++i)
-        EXPECT_EQ(out[i].encounterIndex, i) << i;
+        EXPECT_EQ(out[i].entry, order[i]) << i;
+
+    // The swap is in the ORDER only. Each keeps its own kill-bit, or one boss's
+    // death would be read as the other's.
+    for (uint32 i = 0; i < 8; ++i)
+    {
+        uint32 const bit = i == 4 ? 5u : i == 5 ? 4u : i;
+        EXPECT_EQ(out[i].encounterIndex, bit) << i;
+        EXPECT_EQ(out[i].kind, DungeonAnchorKind::Boss) << i;
+    }
+    // Exactly one Geddon: the derived (spawn-anchored) copy is removed, not joined.
+    uint32 geddons = 0;
+    for (DungeonBossInfo const& b : out)
+        if (b.entry == 12056u)
+            ++geddons;
+    EXPECT_EQ(geddons, 1u);
 
     // ...then Majordomo, the summon objective, and Ragnaros.
     EXPECT_EQ(out[8].entry, 12018u);

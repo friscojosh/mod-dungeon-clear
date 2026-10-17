@@ -9,6 +9,7 @@
 
 #include "DungeonClearMath.h"
 #include "DungeonClearTuning.h"
+#include "DcDireMaulTribute.h"
 #include "Ai/Dungeon/DungeonClear/Settings/DcSettings.h"
 #include <algorithm>
 #include <cmath>
@@ -150,6 +151,22 @@ static void ReapPetReleases()
         Player* player = ObjectAccessor::FindPlayer(guid);
         if (!player || !player->IsInWorld())
             continue;
+        // A pet can chase a caster into Slip'kik's patrol even while its
+        // owner stays behind the wall. Keep the existing passive hold until
+        // this pull ends; the normal release also handles stop/teardown.
+        if (DcDireMaulTribute::TrapPullActive(player))
+        {
+            if (Pet* pet = player->GetPet())
+            {
+                pet->SetReactState(REACT_PASSIVE);
+                if (pet->GetVictim())
+                    if (PlayerbotAI* ai = GET_PLAYERBOT_AI(player))
+                        ai->PetFollow();
+            }
+            std::lock_guard<std::mutex> lock(g_dcPassiveMutex);
+            g_dcPetReleaseAt[guid] = getMSTime() + 1000;
+            continue;
+        }
         if (Pet* pet = player->GetPet())
             pet->SetReactState(REACT_DEFENSIVE);
     }
@@ -391,11 +408,11 @@ void DcFollowerLifecycle::RemoveFollowerPassive(Player* follower)
         // (ticked from ReapStrandedPassives) applies it once the delay elapses.
         // A non-positive delay reverts to the old immediate release.
         float const delaySec = DcSettings::GetFloat(follower, "PullPetReleaseDelay");
-        if (delaySec > 0.0f && follower->GetPet())
+        if ((delaySec > 0.0f || DcDireMaulTribute::TrapPullActive(follower)) && follower->GetPet())
         {
             std::lock_guard<std::mutex> lock(g_dcPassiveMutex);
             g_dcPetReleaseAt[follower->GetGUID()] =
-                getMSTime() + uint32(delaySec * 1000.0f);
+                getMSTime() + uint32((delaySec > 0.0f ? delaySec : 1.0f) * 1000.0f);
         }
         else if (Pet* pet = follower->GetPet())
             pet->SetReactState(REACT_DEFENSIVE);

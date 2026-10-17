@@ -46,7 +46,7 @@ cmake --build "${BUILD_DIR}" --target dungeon_clear_tests -j"$(nproc)"
 # mmaps/ for the map, so listing one costs nothing when the navmesh is absent.
 echo "Running unit tests..."
 cd "${BUILD_DIR}"
-./dungeon_clear_tests --gtest_filter='*DungeonClear*:Dc*:RoomAggro*:BossRoster*:DungeonEvent*:EventBuilder*:CullingOfStratholme*:TrialOfTheChampion*:Oculus*'
+./dungeon_clear_tests --gtest_filter='*DungeonClear*:Dc*:RoomAggro*:BossRoster*:DungeonEvent*:EventBuilder*:CullingOfStratholme*:TrialOfTheChampion*:Oculus*:SealedEncounter*'
 
 echo "----------------------------------------------------------"
 echo "Tests completed successfully!"

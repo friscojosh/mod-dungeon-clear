@@ -68,6 +68,8 @@ session, so it needs no group.)
 | Slash command | In-party chat keyword | What it does |
 |---|---|---|
 | `.dc on` | `dc on` / `dungeon clear on` | Start the clear. |
+| `.dc on tribute` | `dc on tribute` | Start a full Tribute run inside Dire Maul North. |
+| `.dc on normal` | `dc on normal` | Start a normal clear, overriding a saved Tribute preference. |
 | `.dc off` | `dc off` / `dungeon clear off` | Stop and return bots to the player. |
 | `.dc pause` | `dc pause` / `dungeon clear pause` | Soft-stop in place; resume with the same command. |
 | `.dc skip` | `dc skip` | Skip the current objective if the tank is stalled. |
@@ -83,6 +85,23 @@ There is also `.dc test`, a GM-only automated test harness — see
 
 Non-tank party bots follow the tank only while it has dungeon clear enabled, then
 revert to the player automatically.
+
+## Dire Maul Tribute
+
+Choose **DM North Tribute** in AzParty's Dungeon Clear panel, or use `.dc on tribute`
+inside Dire Maul North. Normal clears remain the default. The tank needs a Gordok
+Ogre Suit, one Thorium Widget, and one Frost Oil in its own bags. DC does not create
+these supplies or take them from the player's inventory.
+
+The route spares the guards, waits for patrol openings, repairs Slip'kik's trap,
+and sends the disguised tank to Kromcrush while the other bots hold back. Follow
+the party-chat instruction to wait during these interactions. After King Gordok,
+the tank talks to Mizzle and verifies that the spawned chest contains full Tribute;
+players can then loot it normally.
+
+Skip and Go cannot bypass the required Tribute steps. Stop the run before changing
+its type. If an interaction stalls, resolve the reported problem, then use
+`.dc off` and `.dc on tribute` to retry. Killing a spared boss fails the run.
 
 ## Pull modes
 

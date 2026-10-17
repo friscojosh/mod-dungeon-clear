@@ -16,6 +16,7 @@
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcChessBoard.h"
 #include "Ai/Dungeon/DungeonClear/Util/DcCombatPurge.h"
+#include "Ai/Dungeon/DungeonClear/Util/DcDireMaulTribute.h"
 
 #include <list>
 #include <unordered_set>
@@ -292,6 +293,8 @@ namespace
 
 bool DcTargetExclusionRegistry::HasRowsFor(uint32 mapId)
 {
+    if (mapId == DcDireMaulTribute::MAP)
+        return true;
     for (DcTargetExclusionRow const& r : kRows)
         if (r.mapId == mapId)
             return true;
@@ -300,6 +303,9 @@ bool DcTargetExclusionRegistry::HasRowsFor(uint32 mapId)
 
 bool DcTargetExclusionRegistry::IsExcluded(Player* bot, uint32 mapId, uint32 entry, bool forTank)
 {
+    if (mapId == DcDireMaulTribute::MAP && DcDireMaulTribute::IsProtectedEntry(entry) &&
+        DcDireMaulTribute::Enabled(bot))
+        return true;
     for (DcTargetExclusionRow const& r : kRows)
         if (r.mapId == mapId && r.entry == entry)
         {

@@ -571,7 +571,7 @@ protected:
 // Test status push when mod-dungeon-clear is disabled
 TEST_F(DungeonClearStatusTest, StatusDisabled)
 {
-    std::string expected = "STATUS\t0\t0\tNone\t\t0\toff\t\t0\t0";
+    std::string expected = "STATUS\t0\t0\tNone\t\t0\toff\t\t0\t0\tnormal";
     EXPECT_EQ(DcStatusPublisher::BuildStatusPayload(botAI), expected);
 }
 
@@ -582,7 +582,7 @@ TEST_F(DungeonClearStatusTest, StatusPaused)
     DcRun::Of(context).enabled = true;
     DcRun::Of(context).paused = true;
 
-    std::string expected = "STATUS\t1\t0\tNone\t\t0\tpaused\tholding position\t0\t0";
+    std::string expected = "STATUS\t1\t0\tNone\t\t0\tpaused\tholding position\t0\t0\tnormal";
     EXPECT_EQ(DcStatusPublisher::BuildStatusPayload(botAI), expected);
 }
 
@@ -595,7 +595,7 @@ TEST_F(DungeonClearStatusTest, StatusPausedWithReason)
     DcRun::Of(context).pauseReason = "a closed door is blocking the path";
 
     std::string expected =
-        "STATUS\t1\t0\tNone\t\t0\tpaused\ta closed door is blocking the path\t0\t0";
+        "STATUS\t1\t0\tNone\t\t0\tpaused\ta closed door is blocking the path\t0\t0\tnormal";
     EXPECT_EQ(DcStatusPublisher::BuildStatusPayload(botAI), expected);
 }
 
@@ -611,7 +611,7 @@ TEST_F(DungeonClearStatusTest, StatusStalledDoorUnverifiedFallsBackToStalled)
     context->SetRefValue<std::string>("dungeon clear stall reason", "door_blocked");
     context->SetValue<ObjectGuid>("dungeon clear blocking door", ObjectGuid(uint64(12345)));
 
-    std::string expected = "STATUS\t1\t0\tNone\tdoor_blocked\t0\tstalled\t\t0\t0";
+    std::string expected = "STATUS\t1\t0\tNone\tdoor_blocked\t0\tstalled\t\t0\t0\tnormal";
     EXPECT_EQ(DcStatusPublisher::BuildStatusPayload(botAI), expected);
 }
 
@@ -621,7 +621,7 @@ TEST_F(DungeonClearStatusTest, StatusLooting)
     DcRun::Of(context).enabled = true;
     context->SetValue<bool>("has available loot", true);
 
-    std::string expected = "STATUS\t1\t0\tNone\t\t0\tlooting\tCollecting loot.\t0\t0";
+    std::string expected = "STATUS\t1\t0\tNone\t\t0\tlooting\tCollecting loot.\t0\t0\tnormal";
     EXPECT_EQ(DcStatusPublisher::BuildStatusPayload(botAI), expected);
 }
 
@@ -642,7 +642,7 @@ TEST_F(DungeonClearStatusTest, StatusFightingTrash)
 
     context->SetValue<Unit*>("current target", target);
 
-    std::string expected = "STATUS\t1\t0\tNone\t\t0\tfighting_trash\tFighting Goblin.\t0\t0";
+    std::string expected = "STATUS\t1\t0\tNone\t\t0\tfighting_trash\tFighting Goblin.\t0\t0\tnormal";
     EXPECT_EQ(DcStatusPublisher::BuildStatusPayload(botAI), expected);
 }
 

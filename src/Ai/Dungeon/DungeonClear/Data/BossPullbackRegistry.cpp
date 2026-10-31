@@ -4,6 +4,7 @@
  */
 
 #include "BossPullbackRegistry.h"
+#include "McAnchors.h"  // mod-playerbots: the shared Molten Core anchors
 
 #include <vector>
 
@@ -120,7 +121,7 @@ namespace
         static std::vector<BossPullback> const rows = {
             // map  entry  anchor x  y  z  forceAggro  summonIfStuck  tag x  y  radius
             { 409, 12018, 714.7f, -1205.3f, -119.6f },
-            { 409, 12056, 712.0f, -710.0f, -209.2f, 0.0f, false, 650.0f, -781.0f, 22.0f },
+            { 409, 12056, mcanchors::GeddonTank.x, mcanchors::GeddonTank.y, mcanchors::GeddonTank.z, 0.0f, false, 650.0f, -781.0f, 22.0f },
         };
         return rows;
     }

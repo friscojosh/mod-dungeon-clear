@@ -208,6 +208,8 @@ if (BUILD_TESTING)
         target_include_directories(dungeon_clear_tests PRIVATE
             "${MOD_PATH}/src"
             "${MOD_PATH}/src/Ai/Dungeon/DungeonClear/Util"
+            # mod-playerbots' shared Molten Core anchors (McAnchors.h), which the MC tables include.
+            "${CMAKE_SOURCE_DIR}/modules/mod-playerbots/src/Ai/Raid/MC"
             "${CMAKE_SOURCE_DIR}/src/test/mocks"
         )
 

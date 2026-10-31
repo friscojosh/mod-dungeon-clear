@@ -4,6 +4,7 @@
  */
 
 #include "ScriptedPullRegistry.h"
+#include "McAnchors.h"  // mod-playerbots: the shared Molten Core anchors
 
 #include <algorithm>
 #include <cmath>
@@ -758,8 +759,8 @@ namespace
             // pull, not these.
             //
             // Not yet run live.
-            float constexpr MC_GEDDON_CAMP_X = 712.0f, MC_GEDDON_CAMP_Y = -710.0f,
-                            MC_GEDDON_CAMP_Z = -209.2f;
+            float constexpr MC_GEDDON_CAMP_X = mcanchors::GeddonTank.x, MC_GEDDON_CAMP_Y = mcanchors::GeddonTank.y,
+                            MC_GEDDON_CAMP_Z = mcanchors::GeddonTank.z;
             float constexpr MC_GEDDON_ARM_R  = 35.0f;
             // One floor. The band only has to cover the yard of relief between the
             // spawns and a cylinder's authored centre.

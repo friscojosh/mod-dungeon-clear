@@ -3,6 +3,7 @@
  * and/or modify it under version 3 of the License, or (at your option), any later version.
  */
 
+#include "McAnchors.h"
 #include "gtest/gtest.h"
 
 #include <cmath>
@@ -242,6 +243,10 @@ TEST(DungeonClearBossPullbackTest, GeddonsAnchorIsOnePointInThreeTables)
     // waiting somewhere the tank does not drag him to.
     BossPullback const* row = BossPullbackRegistry::Find(kMoltenCore, kGeddon);
     ASSERT_NE(row, nullptr);
+    // ...and that point is the shared one mod-playerbots' Geddon duty tank and practice use.
+    EXPECT_FLOAT_EQ(row->campX, mcanchors::GeddonTank.x);
+    EXPECT_FLOAT_EQ(row->campY, mcanchors::GeddonTank.y);
+    EXPECT_FLOAT_EQ(row->campZ, mcanchors::GeddonTank.z);
 
     bool found = false;
     for (BossRosterPatch const& patch : BossRosterRegistry::AllPatches())

@@ -5,6 +5,7 @@
 
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonEventTables.h"
 #include "Ai/Dungeon/DungeonClear/Data/Events/DungeonRosterBuilders.h"
+#include "McAnchors.h"  // mod-playerbots: the shared Molten Core anchors
 
 // --- Molten Core (map 409) — raid-support Plan E1, the pilot raid ----------
 //
@@ -78,7 +79,8 @@ namespace
     // is tagged. Three tables name this one point — that row, those stages and the
     // roster anchor below — so keep them in step (t/TestBossPullback.cpp and
     // t/TestScriptedPull.cpp both check it).
-    constexpr float kGeddonCampX = 712.0f, kGeddonCampY = -710.0f, kGeddonCampZ = -209.2f;
+    constexpr float kGeddonCampX = mcanchors::GeddonTank.x, kGeddonCampY = mcanchors::GeddonTank.y,
+                    kGeddonCampZ = mcanchors::GeddonTank.z;
     // His post-victory teleport spot by Ragnaros' lair (the gossip target):
     constexpr float kRagGossipX = 848.933f, kRagGossipY = -812.875f, kRagGossipZ = -229.601f;
     // Ragnaros' summon position (the fight anchor):
